@@ -5,7 +5,15 @@ import { useRouter } from 'next/navigation'
 import { Nav } from '@/components/Nav'
 
 interface Server { id: string; name: string; host: string; preset: string | null }
-interface AccountRow { sourceEmail: string; sourcePass: string; destEmail: string; destPass: string }
+interface AccountOptions { subfolder2?: string; exclude?: string; regextrans2?: string; extraArgs?: string }
+interface AccountRow { sourceEmail: string; sourcePass: string; destEmail: string; destPass: string; options?: AccountOptions; expanded?: boolean }
+
+const ACCOUNT_OVERRIDABLE: Array<[keyof AccountOptions, string, string]> = [
+  ['subfolder2',  '--subfolder2',  'e.g. Archive — overrides job default'],
+  ['exclude',     '--exclude',     'Regex of folders to skip for this account'],
+  ['regextrans2', '--regextrans2', 'One s### rule per line'],
+  ['extraArgs',   'Extra args',    'Appended to imapsync command'],
+]
 
 const defaultOptions = {
   ssl1: true, ssl2: true, automap: true, addheader: true,
@@ -70,15 +78,35 @@ export default function NewMigrationPage() {
 
   const addRow = () => setAccounts(a => [...a, { sourceEmail: '', sourcePass: '', destEmail: '', destPass: '' }])
   const removeRow = (i: number) => setAccounts(a => a.filter((_, idx) => idx !== i))
-  const updateRow = (i: number, field: keyof AccountRow, value: string) =>
+  const updateRow = (i: number, field: 'sourceEmail' | 'sourcePass' | 'destEmail' | 'destPass', value: string) =>
     setAccounts(a => a.map((row, idx) => idx === i ? { ...row, [field]: value } : row))
+  const toggleExpand = (i: number) =>
+    setAccounts(a => a.map((row, idx) => idx === i ? { ...row, expanded: !row.expanded } : row))
+  const updateOption = (i: number, key: keyof AccountOptions, value: string) =>
+    setAccounts(a => a.map((row, idx) => {
+      if (idx !== i) return row
+      const next = { ...(row.options ?? {}), [key]: value }
+      // strip empty keys so we never send {subfolder2: ''}
+      Object.keys(next).forEach(k => { if (!(next as Record<string, string>)[k]) delete (next as Record<string, string>)[k] })
+      return { ...row, options: next }
+    }))
+  const countOverrides = (opts?: AccountOptions) =>
+    opts ? Object.values(opts).filter(v => v && String(v).trim()).length : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     if (!sourceServerId || !destServerId) { setError('Please select a source and destination server.'); return }
     if (sourceServerId === destServerId) { setError('Source and destination servers must be different.'); return }
-    const validAccounts = accounts.filter(a => a.sourceEmail && a.destEmail && a.sourcePass && a.destPass)
+    const validAccounts = accounts
+      .filter(a => a.sourceEmail && a.destEmail && a.sourcePass && a.destPass)
+      .map(a => ({
+        sourceEmail: a.sourceEmail,
+        sourcePass: a.sourcePass,
+        destEmail: a.destEmail,
+        destPass: a.destPass,
+        options: countOverrides(a.options) > 0 ? a.options : null,
+      }))
     if (validAccounts.length === 0) { setError('At least one complete account entry is required.'); return }
 
     if (startMode === 'scheduled' && !scheduledAt) {
@@ -192,19 +220,53 @@ export default function NewMigrationPage() {
                         <span key={h} className="text-xs text-gray-600">{h}</span>
                       ))}
                     </div>
-                    {accounts.map((row, i) => (
-                      <div key={i} className="grid grid-cols-4 gap-2 items-center">
-                        <input value={row.sourceEmail} onChange={e => updateRow(i, 'sourceEmail', e.target.value)} className="input text-xs" placeholder="user@source.com" />
-                        <input type="password" value={row.sourcePass} onChange={e => updateRow(i, 'sourcePass', e.target.value)} className="input text-xs" placeholder="Password" />
-                        <input value={row.destEmail} onChange={e => updateRow(i, 'destEmail', e.target.value)} className="input text-xs" placeholder="user@dest.com" />
-                        <div className="flex gap-1.5">
-                          <input type="password" value={row.destPass} onChange={e => updateRow(i, 'destPass', e.target.value)} className="input text-xs" placeholder="Password" />
-                          {accounts.length > 1 && (
-                            <button type="button" onClick={() => removeRow(i)} className="text-gray-600 hover:text-red-400 px-1 shrink-0">✕</button>
+                    {accounts.map((row, i) => {
+                      const overrides = countOverrides(row.options)
+                      return (
+                        <div key={i} className="space-y-2">
+                          <div className="grid grid-cols-4 gap-2 items-center">
+                            <input value={row.sourceEmail} onChange={e => updateRow(i, 'sourceEmail', e.target.value)} className="input text-xs" placeholder="user@source.com" />
+                            <input type="password" value={row.sourcePass} onChange={e => updateRow(i, 'sourcePass', e.target.value)} className="input text-xs" placeholder="Password" />
+                            <input value={row.destEmail} onChange={e => updateRow(i, 'destEmail', e.target.value)} className="input text-xs" placeholder="user@dest.com" />
+                            <div className="flex gap-1.5">
+                              <input type="password" value={row.destPass} onChange={e => updateRow(i, 'destPass', e.target.value)} className="input text-xs" placeholder="Password" />
+                              <button type="button" onClick={() => toggleExpand(i)} title="Per-account options" className={`text-xs px-2 shrink-0 rounded border ${overrides > 0 ? 'border-purple-600/40 text-purple-400 bg-purple-600/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                                ⚙{overrides > 0 && <span className="ml-1">{overrides}</span>}
+                              </button>
+                              {accounts.length > 1 && (
+                                <button type="button" onClick={() => removeRow(i)} className="text-gray-600 hover:text-red-400 px-1 shrink-0">✕</button>
+                              )}
+                            </div>
+                          </div>
+                          {row.expanded && (
+                            <div className="ml-2 pl-3 border-l-2 border-purple-600/30 py-2 space-y-2 bg-[#0e0e1a] rounded-r">
+                              <p className="text-xs text-gray-500">Per-account overrides — leave empty to use the job&apos;s default.</p>
+                              {ACCOUNT_OVERRIDABLE.map(([key, label, placeholder]) => (
+                                <div key={key} className="grid grid-cols-[120px_1fr] gap-2 items-start">
+                                  <label className="text-xs text-gray-400 font-mono pt-1.5">{label}</label>
+                                  {key === 'regextrans2' ? (
+                                    <textarea
+                                      value={row.options?.[key] ?? ''}
+                                      onChange={e => updateOption(i, key, e.target.value)}
+                                      className="input text-xs font-mono"
+                                      rows={2}
+                                      placeholder={placeholder}
+                                    />
+                                  ) : (
+                                    <input
+                                      value={row.options?.[key] ?? ''}
+                                      onChange={e => updateOption(i, key, e.target.value)}
+                                      className="input text-xs"
+                                      placeholder={placeholder}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
 
                   <button type="button" onClick={addRow} className="btn-secondary text-xs">+ Add row</button>

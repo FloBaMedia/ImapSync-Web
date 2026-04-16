@@ -72,7 +72,8 @@ function buildArgs(job, account, options) {
 }
 
 async function startAccount(job, account) {
-  const options = job.options ?? {}
+  // Account-level options override job-level options key by key
+  const options = { ...(job.options ?? {}), ...(account.options ?? {}) }
   const args = buildArgs(job, account, options)
   const logPath = path.join(LOG_DIR, `${account.id}.log`)
   // truncate log file at start so re-runs don't accumulate

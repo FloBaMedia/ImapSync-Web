@@ -59,6 +59,7 @@ model MigrationAccount {
   sourcePass    String
   destEmail     String
   destPass      String
+  options       Json?
   status        String    @default("PENDING")
   stopRequested Boolean   @default(false)
   startedAt     DateTime?

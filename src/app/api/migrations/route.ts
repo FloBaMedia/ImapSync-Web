@@ -80,11 +80,13 @@ export async function POST(req: NextRequest) {
           sourcePass: string
           destEmail: string
           destPass: string
+          options?: Record<string, unknown> | null
         }) => ({
           sourceEmail: a.sourceEmail.trim(),
           sourcePass: encrypt(a.sourcePass),
           destEmail: a.destEmail.trim(),
           destPass: encrypt(a.destPass),
+          options: a.options && Object.keys(a.options).length > 0 ? a.options : undefined,
         })),
       },
     },

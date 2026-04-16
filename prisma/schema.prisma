@@ -47,17 +47,18 @@ model MigrationJob {
 }
 
 model MigrationAccount {
-  id          String    @id @default(cuid())
-  jobId       String
-  job         MigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  sourceEmail String
-  sourcePass  String
-  destEmail   String
-  destPass    String
-  status      String    @default("PENDING")
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  exitCode    Int?
+  id            String    @id @default(cuid())
+  jobId         String
+  job           MigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sourceEmail   String
+  sourcePass    String
+  destEmail     String
+  destPass      String
+  status        String    @default("PENDING")
+  stopRequested Boolean   @default(false)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  exitCode      Int?
 
   logs MigrationLog[]
 }

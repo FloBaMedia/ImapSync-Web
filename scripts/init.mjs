@@ -1,6 +1,6 @@
-// Docker entrypoint initialization: create admin user, seed defaults, reset stuck jobs.
-// Runs as ESM before `node server.js` starts.
-import { createRequire } from 'module'
+// Docker entrypoint initialization for the app container:
+// creates admin user and seeds default settings. Job/account state recovery
+// is the runner container's responsibility (see scripts/runner.mjs).
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 
@@ -35,16 +35,6 @@ try {
   for (const [key, value] of defaults) {
     await prisma.setting.upsert({ where: { key }, update: {}, create: { key, value } })
   }
-
-  // Reset stuck RUNNING jobs from a previous session
-  await prisma.migrationJob.updateMany({
-    where: { status: 'RUNNING' },
-    data: { status: 'STOPPED', finishedAt: new Date() },
-  })
-  await prisma.migrationAccount.updateMany({
-    where: { status: 'RUNNING' },
-    data: { status: 'FAILED', finishedAt: new Date() },
-  })
 
   console.log('Initialization complete.')
 } finally {

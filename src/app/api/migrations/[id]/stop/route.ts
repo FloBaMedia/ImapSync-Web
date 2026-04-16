@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { stopAllForJob } from '@/lib/imapsync'
 
 export async function POST(
   _req: NextRequest,
@@ -17,15 +16,21 @@ export async function POST(
     return NextResponse.json({ error: 'Job läuft nicht' }, { status: 409 })
   }
 
-  stopAllForJob(id)
+  // Signal runner to SIGTERM the imapsync child for each running account.
+  // The runner flips status to STOPPED + clears stopRequested when the proc exits.
+  await prisma.migrationAccount.updateMany({
+    where: { jobId: id, status: 'RUNNING' },
+    data: { stopRequested: true },
+  })
 
-  await prisma.migrationJob.update({
-    where: { id },
+  // Pending accounts haven't started — mark them STOPPED so the runner skips them.
+  await prisma.migrationAccount.updateMany({
+    where: { jobId: id, status: 'PENDING' },
     data: { status: 'STOPPED', finishedAt: new Date() },
   })
 
-  await prisma.migrationAccount.updateMany({
-    where: { jobId: id, status: 'RUNNING' },
+  await prisma.migrationJob.update({
+    where: { id },
     data: { status: 'STOPPED', finishedAt: new Date() },
   })
 

@@ -17,7 +17,9 @@ services:
       retries: 10
 
   app:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -27,12 +29,34 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      LOG_DIR: /shared/logs
       NODE_ENV: production
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./logs:/app/logs
+      - shared-logs:/shared/logs
+
+  runner:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://imapsync:${DB_PASSWORD:-changeme}@db:5432/imapsync
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9}
+      LOG_DIR: /shared/logs
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
+      MAX_PARALLEL: ${MAX_PARALLEL:-50}
+      NODE_ENV: production
+    depends_on:
+      app:
+        condition: service_started
+      db:
+        condition: service_healthy
+    volumes:
+      - shared-logs:/shared/logs
 
 volumes:
   pgdata:
+  shared-logs:

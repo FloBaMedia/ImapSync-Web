@@ -17,8 +17,12 @@ COPY . .
 RUN pnpm exec prisma generate
 RUN pnpm build
 
-# Drop Prisma WASM engines for unused databases (keep only postgresql)
-RUN find node_modules/@prisma/client/runtime \
+# Drop devDependencies (typescript, tailwind, @types/*, tsx, ...) — not needed at runtime
+RUN pnpm prune --prod
+
+# Drop Prisma WASM engines for unused databases (keep only postgresql) — both in
+# the @prisma/client runtime AND in the bundled prisma CLI
+RUN find node_modules/@prisma/client/runtime node_modules/prisma/build \
         -type f \( -name '*cockroachdb*' -o -name '*mysql*' -o -name '*sqlite*' -o -name '*sqlserver*' \) \
         -delete
 

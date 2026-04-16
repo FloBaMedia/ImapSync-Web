@@ -20,7 +20,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:3000"
+      - "3000:3000"
     environment:
       DATABASE_URL: postgresql://imapsync:${DB_PASSWORD:-changeme}@db:5432/imapsync
       JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production}

@@ -22,6 +22,8 @@ interface MigrationJob {
   createdAt: string
   startedAt: string | null
   finishedAt: string | null
+  scheduledAt: string | null
+  queueGroup: string | null
   concurrency: number
   sourceServer: { name: string; host: string }
   destServer: { name: string; host: string }
@@ -73,7 +75,11 @@ export default function MigrationsPage() {
 
   const handleStart = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
-    await fetch(`/api/migrations/${id}/start`, { method: 'POST' })
+    await fetch(`/api/migrations/${id}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'now' }),
+    })
     load()
   }
 
@@ -125,6 +131,7 @@ export default function MigrationsPage() {
                     <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Servers</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Accounts</th>
                     <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
                     <th className="px-5 py-3"></th>
@@ -142,6 +149,11 @@ export default function MigrationsPage() {
                         <p className="text-xs text-gray-600">→ {job.destServer.name}</p>
                       </td>
                       <td className="px-5 py-4"><StatusBadge status={job.status} /></td>
+                      <td className="px-5 py-4 text-xs">
+                        {job.scheduledAt && <p className="text-purple-300">⏰ {new Date(job.scheduledAt).toLocaleString('en-US')}</p>}
+                        {job.queueGroup && <p className="text-purple-300">📋 {job.queueGroup}</p>}
+                        {!job.scheduledAt && !job.queueGroup && <p className="text-gray-600">—</p>}
+                      </td>
                       <td className="px-5 py-4">
                         <span className="text-sm text-gray-300">{job._count.accounts}</span>
                         <ProgressBar total={job._count.accounts} progress={job.progress} />

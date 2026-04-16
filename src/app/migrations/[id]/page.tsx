@@ -23,6 +23,8 @@ interface Job {
   createdAt: string
   startedAt: string | null
   finishedAt: string | null
+  scheduledAt: string | null
+  queueGroup: string | null
   concurrency: number
   sourceServer: { name: string; host: string; port: number }
   destServer: { name: string; host: string; port: number }
@@ -46,6 +48,9 @@ export default function MigrationDetailPage() {
   const [loading, setLoading] = useState(true)
   const [logAccount, setLogAccount] = useState<Account | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [showSchedule, setShowSchedule] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState('')
+  const [scheduleQueue, setScheduleQueue] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/migrations/${id}`)
@@ -60,9 +65,22 @@ export default function MigrationDetailPage() {
     return () => clearInterval(interval)
   }, [load])
 
-  const handleStart = async () => {
+  const handleStart = async (mode: 'now' | 'scheduled' | 'queued' = 'now') => {
+    if (mode === 'scheduled' && !scheduleAt) { alert('Pick a date/time'); return }
+    if (mode === 'queued' && !scheduleQueue.trim()) { alert('Enter a queue name'); return }
     setActionLoading(true)
-    await fetch(`/api/migrations/${id}/start`, { method: 'POST' })
+    await fetch(`/api/migrations/${id}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode,
+        scheduledAt: scheduleAt ? new Date(scheduleAt).toISOString() : null,
+        queueGroup: scheduleQueue.trim() || null,
+      }),
+    })
+    setShowSchedule(false)
+    setScheduleAt('')
+    setScheduleQueue('')
     await load()
     setActionLoading(false)
   }
@@ -117,15 +135,54 @@ export default function MigrationDetailPage() {
               {job.status === 'RUNNING' ? (
                 <button onClick={handleStop} disabled={actionLoading} className="btn-danger">Stop</button>
               ) : (
-                <button onClick={handleStart} disabled={actionLoading} className="btn-success">
-                  {['COMPLETED', 'FAILED', 'STOPPED'].includes(job.status) ? 'Retry failed' : 'Start'}
-                </button>
+                <>
+                  <button onClick={() => handleStart('now')} disabled={actionLoading} className="btn-success">
+                    {['COMPLETED', 'FAILED', 'STOPPED'].includes(job.status) ? 'Retry failed' : 'Start now'}
+                  </button>
+                  <button onClick={() => setShowSchedule(s => !s)} disabled={actionLoading} className="btn-secondary">
+                    {showSchedule ? 'Cancel' : 'Schedule…'}
+                  </button>
+                </>
               )}
               {job.status !== 'RUNNING' && (
                 <button onClick={handleDelete} className="btn-danger">Delete</button>
               )}
             </div>
           </div>
+
+          {showSchedule && (
+            <div className="card p-5 space-y-4 border border-purple-600/30">
+              <h2 className="text-sm font-semibold text-purple-300">Schedule this job</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Start at (optional)</label>
+                  <input type="datetime-local" value={scheduleAt} onChange={e => setScheduleAt(e.target.value)} className="input" />
+                  <p className="text-xs text-gray-500 mt-1">Empty + queue name = runs as soon as the queue is free.</p>
+                </div>
+                <div>
+                  <label className="label">Queue name (optional)</label>
+                  <input value={scheduleQueue} onChange={e => setScheduleQueue(e.target.value)} className="input" placeholder="e.g. nightly-batch" />
+                  <p className="text-xs text-gray-500 mt-1">Jobs sharing a queue name run sequentially.</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => handleStart(scheduleAt ? 'scheduled' : 'queued')} disabled={actionLoading || (!scheduleAt && !scheduleQueue.trim())} className="btn-primary text-sm">
+                  Save schedule
+                </button>
+                <button onClick={() => { setShowSchedule(false); setScheduleAt(''); setScheduleQueue('') }} className="btn-secondary text-sm">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {(job.scheduledAt || job.queueGroup) && job.status === 'SCHEDULED' && (
+            <div className="card p-4 border border-purple-600/30">
+              <p className="text-sm text-purple-300">
+                {job.scheduledAt && <>⏰ Scheduled for <span className="font-mono">{new Date(job.scheduledAt).toLocaleString('en-US')}</span></>}
+                {job.scheduledAt && job.queueGroup && <span className="text-gray-500"> · </span>}
+                {job.queueGroup && <>📋 Queue: <span className="font-mono">{job.queueGroup}</span></>}
+              </p>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

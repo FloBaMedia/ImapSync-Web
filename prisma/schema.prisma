@@ -39,11 +39,16 @@ model MigrationJob {
   status         String    @default("PENDING")
   options        Json?
   concurrency    Int       @default(1)
+  scheduledAt    DateTime?
+  queueGroup     String?
   createdAt      DateTime  @default(now())
   startedAt      DateTime?
   finishedAt     DateTime?
 
   accounts MigrationAccount[]
+
+  @@index([status, scheduledAt])
+  @@index([queueGroup, status])
 }
 
 model MigrationAccount {

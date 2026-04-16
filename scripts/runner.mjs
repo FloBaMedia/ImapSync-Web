@@ -124,7 +124,44 @@ async function startAccount(job, account) {
   })
 }
 
+async function promoteScheduledJobs() {
+  // Promote SCHEDULED -> RUNNING when:
+  //   * scheduledAt is null OR <= now
+  //   * AND no other RUNNING job shares this job's queueGroup (if set)
+  const now = new Date()
+  const candidates = await prisma.migrationJob.findMany({
+    where: {
+      status: 'SCHEDULED',
+      OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }],
+    },
+    orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'asc' }],
+    select: { id: true, queueGroup: true, name: true },
+  })
+  if (candidates.length === 0) return
+
+  const busyGroups = new Set(
+    (await prisma.migrationJob.findMany({
+      where: { status: 'RUNNING', queueGroup: { not: null } },
+      select: { queueGroup: true },
+    })).map(j => j.queueGroup)
+  )
+
+  for (const c of candidates) {
+    if (c.queueGroup && busyGroups.has(c.queueGroup)) continue
+    const result = await prisma.migrationJob.updateMany({
+      where: { id: c.id, status: 'SCHEDULED' }, // guard against races
+      data: { status: 'RUNNING', startedAt: new Date(), finishedAt: null },
+    })
+    if (result.count === 0) continue
+    if (c.queueGroup) busyGroups.add(c.queueGroup)
+    console.log(`Promoted SCHEDULED -> RUNNING: ${c.name} (${c.id})${c.queueGroup ? ` [queue=${c.queueGroup}]` : ''}`)
+  }
+}
+
 async function tick() {
+  // 0. Promote any due SCHEDULED jobs (time-based + queue-group respecting)
+  await promoteScheduledJobs()
+
   // 1. Honor stop requests for running children
   if (processes.size > 0) {
     const stopAccs = await prisma.migrationAccount.findMany({

@@ -1,7 +1,8 @@
-export type Status = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'COMPLETED' | 'FAILED' | 'STOPPED' | 'SKIPPED'
+export type Status = 'PENDING' | 'SCHEDULED' | 'RUNNING' | 'SUCCESS' | 'COMPLETED' | 'FAILED' | 'STOPPED' | 'SKIPPED'
 
 const configs: Record<Status, { label: string; classes: string; dot?: boolean }> = {
-  PENDING:   { label: 'Pending',    classes: 'bg-gray-800 text-gray-400 border-gray-700' },
+  PENDING:   { label: 'Draft',      classes: 'bg-gray-800 text-gray-400 border-gray-700' },
+  SCHEDULED: { label: 'Scheduled',  classes: 'bg-purple-600/20 text-purple-400 border-purple-600/30' },
   RUNNING:   { label: 'Running',    classes: 'bg-blue-600/20 text-blue-400 border-blue-600/30', dot: true },
   SUCCESS:   { label: 'Success',    classes: 'bg-green-600/20 text-green-400 border-green-600/30' },
   COMPLETED: { label: 'Completed',  classes: 'bg-green-600/20 text-green-400 border-green-600/30' },

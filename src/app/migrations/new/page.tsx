@@ -24,7 +24,9 @@ export default function NewMigrationPage() {
   const [options, setOptions] = useState(defaultOptions)
   const [accounts, setAccounts] = useState<AccountRow[]>([{ sourceEmail: '', sourcePass: '', destEmail: '', destPass: '' }])
   const [saving, setSaving] = useState(false)
-  const [startNow, setStartNow] = useState(false)
+  const [startMode, setStartMode] = useState<'now' | 'scheduled' | 'queued' | 'draft'>('now')
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [queueGroup, setQueueGroup] = useState('')
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'accounts' | 'options'>('accounts')
 
@@ -79,6 +81,13 @@ export default function NewMigrationPage() {
     const validAccounts = accounts.filter(a => a.sourceEmail && a.destEmail && a.sourcePass && a.destPass)
     if (validAccounts.length === 0) { setError('At least one complete account entry is required.'); return }
 
+    if (startMode === 'scheduled' && !scheduledAt) {
+      setError('Pick a date/time for the scheduled start.'); return
+    }
+    if (startMode === 'queued' && !queueGroup.trim()) {
+      setError('Enter a queue name.'); return
+    }
+
     setSaving(true)
     const res = await fetch('/api/migrations', {
       method: 'POST',
@@ -87,6 +96,9 @@ export default function NewMigrationPage() {
         name: name || `Migration ${new Date().toLocaleDateString('en-US')}`,
         sourceServerId, destServerId, concurrency, options,
         accounts: validAccounts,
+        startMode,
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        queueGroup: queueGroup.trim() || null,
       }),
     })
 
@@ -98,7 +110,6 @@ export default function NewMigrationPage() {
     }
 
     const job = await res.json()
-    if (startNow) await fetch(`/api/migrations/${job.id}/start`, { method: 'POST' })
     router.push(`/migrations/${job.id}`)
   }
 
@@ -244,18 +255,48 @@ export default function NewMigrationPage() {
               )}
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={startNow} onChange={e => setStartNow(e.target.checked)} className="rounded border-gray-700 bg-gray-900 text-blue-600" />
-                <span className="text-sm text-gray-300">Start immediately after creating</span>
-              </label>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => router.back()} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary">
-                  {saving ? 'Creating...' : startNow ? 'Create & start' : 'Create migration'}
-                </button>
+            {/* Start mode */}
+            <div className="card p-5 space-y-4">
+              <h2 className="text-sm font-semibold text-gray-300">When to start</h2>
+              <div className="space-y-2">
+                {([
+                  ['now', 'Start immediately', 'Run as soon as the job is created'],
+                  ['scheduled', 'Schedule for a specific time', 'Runner picks it up automatically at the chosen time'],
+                  ['queued', 'Add to a queue', 'Runs sequentially with other jobs sharing the same queue name'],
+                  ['draft', 'Save as draft', 'Leaves the job unstarted — start manually later'],
+                ] as const).map(([value, label, hint]) => (
+                  <label key={value} className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-[#1a1a2e]">
+                    <input type="radio" name="startMode" value={value} checked={startMode === value} onChange={() => setStartMode(value)} className="mt-1 accent-blue-500" />
+                    <div>
+                      <p className="text-sm text-gray-200">{label}</p>
+                      <p className="text-xs text-gray-500">{hint}</p>
+                    </div>
+                  </label>
+                ))}
               </div>
+
+              {startMode === 'scheduled' && (
+                <div>
+                  <label className="label">Start at</label>
+                  <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} className="input" />
+                </div>
+              )}
+
+              {(startMode === 'queued' || startMode === 'scheduled') && (
+                <div>
+                  <label className="label">Queue name {startMode === 'scheduled' && <span className="text-gray-600">(optional — leave empty for parallel)</span>}</label>
+                  <input value={queueGroup} onChange={e => setQueueGroup(e.target.value)} className="input" placeholder="e.g. nightly-batch" />
+                  <p className="text-xs text-gray-500 mt-1">Jobs sharing the same queue name run one after another.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3">
+              <button type="button" onClick={() => router.back()} className="btn-secondary">Cancel</button>
+              <button type="submit" disabled={saving} className="btn-primary">
+                {saving ? 'Creating...' : startMode === 'now' ? 'Create & start' : startMode === 'scheduled' ? 'Create & schedule' : startMode === 'queued' ? 'Create & queue' : 'Save draft'}
+              </button>
             </div>
           </form>
         </div>

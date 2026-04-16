@@ -14,7 +14,7 @@ COPY package.json pnpm-lock.yaml ./
 # Docker COPY picks up actual files (not broken symlinks) in the runner stage
 RUN --mount=type=cache,id=pnpm,target=/pnpm-store \
     pnpm config set store-dir /pnpm-store && \
-    pnpm install --frozen-lockfile --shamefully-hoist --ignore-scripts
+    pnpm install --frozen-lockfile --shamefully-hoist
 
 COPY . .
 RUN pnpm exec prisma generate

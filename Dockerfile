@@ -19,21 +19,13 @@ RUN pnpm exec prisma generate
 RUN pnpm build
 
 # ── Runner ────────────────────────────────────────────────────────────────────
-# Ubuntu 22.04 LTS (jammy): imapsync is in universe; 24.04 dropped it
-FROM ubuntu:22.04 AS runner
+# Use the official imapsync image — imapsync + all Perl deps included out of the box
+FROM gilleslamiral/imapsync:latest AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy Node.js binary from builder — avoids nodesource setup in runner
+# Copy Node.js binary from builder — the imapsync image has no Node.js
 COPY --from=builder /usr/local/bin/node /usr/local/bin/node
-
-# Enable universe (imapsync lives there) and install
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common && \
-    add-apt-repository -y universe && \
-    apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends imapsync && \
-    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static     ./.next/static

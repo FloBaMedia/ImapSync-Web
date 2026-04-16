@@ -1,0 +1,77 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Server {
+  id        String   @id @default(cuid())
+  name      String
+  host      String
+  port      Int      @default(993)
+  ssl       Boolean  @default(true)
+  authMech  String?
+  preset    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jobsAsSource MigrationJob[] @relation("SourceServer")
+  jobsAsDest   MigrationJob[] @relation("DestServer")
+}
+
+model MigrationJob {
+  id             String    @id @default(cuid())
+  name           String
+  sourceServerId String
+  sourceServer   Server    @relation("SourceServer", fields: [sourceServerId], references: [id])
+  destServerId   String
+  destServer     Server    @relation("DestServer", fields: [destServerId], references: [id])
+  status         String    @default("PENDING")
+  options        Json?
+  concurrency    Int       @default(1)
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  accounts MigrationAccount[]
+}
+
+model MigrationAccount {
+  id          String    @id @default(cuid())
+  jobId       String
+  job         MigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sourceEmail String
+  sourcePass  String
+  destEmail   String
+  destPass    String
+  status      String    @default("PENDING")
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  exitCode    Int?
+
+  logs MigrationLog[]
+}
+
+model MigrationLog {
+  id        String           @id @default(cuid())
+  accountId String
+  account   MigrationAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  line      String
+  createdAt DateTime         @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

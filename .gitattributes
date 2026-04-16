@@ -1,0 +1,10 @@
+# Normalize line endings to LF on commit (cross-platform)
+* text=auto eol=lf
+
+# Shell scripts must always use LF
+*.sh text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.ico binary

@@ -1,7 +1,11 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '../src/generated/prisma/client'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
 import bcrypt from 'bcryptjs'
 
-const prisma = new PrismaClient()
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const adapter = new PrismaPg(pool)
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   const email = process.env.ADMIN_EMAIL ?? 'admin@example.com'
@@ -11,12 +15,11 @@ async function main() {
   if (!existing) {
     const passwordHash = await bcrypt.hash(password, 12)
     await prisma.adminUser.create({ data: { email, passwordHash } })
-    console.log(`Admin-Benutzer erstellt: ${email}`)
+    console.log(`Admin user created: ${email}`)
   } else {
-    console.log(`Admin-Benutzer existiert bereits: ${email}`)
+    console.log(`Admin user already exists: ${email}`)
   }
 
-  // Default settings
   const defaults = [
     { key: 'ssl1', value: 'true' },
     { key: 'ssl2', value: 'true' },
@@ -38,9 +41,12 @@ async function main() {
     })
   }
 
-  console.log('Standard-Einstellungen gesetzt.')
+  console.log('Default settings applied.')
 }
 
 main()
   .catch(console.error)
-  .finally(() => prisma.$disconnect())
+  .finally(async () => {
+    await prisma.$disconnect()
+    await pool.end()
+  })

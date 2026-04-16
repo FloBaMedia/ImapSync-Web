@@ -10,12 +10,13 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY package.json pnpm-lock.yaml ./
 
 # Mount pnpm store as BuildKit cache — packages are reused across builds
+# --shamefully-hoist: create real directories instead of symlinks so
+# Docker COPY picks up actual files (not broken symlinks) in the runner stage
 RUN --mount=type=cache,id=pnpm,target=/pnpm-store \
     pnpm config set store-dir /pnpm-store && \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --shamefully-hoist
 
 COPY . .
-RUN pnpm exec prisma generate
 RUN pnpm build
 
 # ── Runner ────────────────────────────────────────────────────────────────────

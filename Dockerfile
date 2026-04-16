@@ -48,8 +48,7 @@ COPY --from=builder /app/node_modules/@prisma/adapter-pg ./node_modules/@prisma/
 COPY --from=builder /app/node_modules/pg              ./node_modules/pg
 COPY --from=builder /app/node_modules/bcryptjs        ./node_modules/bcryptjs
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
 
 EXPOSE 3000
 ENTRYPOINT ["/entrypoint.sh"]

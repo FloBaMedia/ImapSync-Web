@@ -28,6 +28,9 @@ RUN find node_modules/@prisma/client/runtime node_modules/prisma/build \
 
 # ── Runner ────────────────────────────────────────────────────────────────────
 FROM gilleslamiral/imapsync:latest AS runner
+# Image ships with a non-root default user; switch to root so prisma can
+# lazy-download the schema-engine binary into node_modules at first migrate
+USER root
 WORKDIR /app
 ENV NODE_ENV=production
 

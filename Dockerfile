@@ -27,8 +27,11 @@ ENV NODE_ENV=production
 # Copy Node.js binary from builder — avoids nodesource setup in runner
 COPY --from=builder /usr/local/bin/node /usr/local/bin/node
 
-# Install imapsync (available in Ubuntu 24.04 apt)
+# Enable universe repo (imapsync lives there), then install
 RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common && \
+    add-apt-repository -y universe && \
+    apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends imapsync && \
     rm -rf /var/lib/apt/lists/*
 

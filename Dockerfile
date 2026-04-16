@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # ── Builder ───────────────────────────────────────────────────────────────────
-# node:22-noble = Ubuntu 24.04 + Node.js 22 preinstalled (skips nodesource setup)
-FROM node:22-noble AS builder
+# node:22-bookworm = official Node.js 22 image (Debian) — no imapsync needed
+FROM node:22-bookworm AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -19,12 +19,15 @@ RUN pnpm exec prisma generate
 RUN pnpm build
 
 # ── Runner ────────────────────────────────────────────────────────────────────
-# Use same base so imapsync is available in apt; node is already included
-FROM node:22-noble AS runner
+# Ubuntu 24.04 for imapsync (not in Debian repos)
+FROM ubuntu:24.04 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# imapsync is only needed at runtime (not in builder)
+# Copy Node.js binary from builder — avoids nodesource setup in runner
+COPY --from=builder /usr/local/bin/node /usr/local/bin/node
+
+# Install imapsync (available in Ubuntu 24.04 apt)
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends imapsync && \
     rm -rf /var/lib/apt/lists/*

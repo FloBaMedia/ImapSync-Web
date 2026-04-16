@@ -11,11 +11,17 @@ COPY package.json pnpm-lock.yaml ./
 # --shamefully-hoist: flat node_modules (real dirs, no symlinks) so COPY works
 RUN --mount=type=cache,id=pnpm,target=/pnpm-store \
     pnpm config set store-dir /pnpm-store && \
-    pnpm install --frozen-lockfile --shamefully-hoist
+    pnpm install --frozen-lockfile --shamefully-hoist && \
+    rm -rf node_modules/.pnpm
 
 COPY . .
 RUN pnpm exec prisma generate
 RUN pnpm build
+
+# Drop Prisma WASM engines for unused databases (keep only postgresql)
+RUN find node_modules/@prisma/client/runtime \
+        -type f \( -name '*cockroachdb*' -o -name '*mysql*' -o -name '*sqlite*' -o -name '*sqlserver*' \) \
+        -delete
 
 # ── Runner ────────────────────────────────────────────────────────────────────
 FROM gilleslamiral/imapsync:latest AS runner

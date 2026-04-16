@@ -197,15 +197,18 @@ async function recovery() {
 }
 
 async function waitForDb() {
-  for (let i = 0; i < 60; i++) {
+  // Probe a schema table (not just SELECT 1) so we also wait for the app
+  // container to finish `prisma migrate deploy` before proceeding.
+  for (let i = 0; i < 120; i++) {
     try {
-      await prisma.$queryRaw`SELECT 1`
+      await prisma.$queryRaw`SELECT 1 FROM "MigrationAccount" LIMIT 1`
       return
     } catch {
+      if (i === 0) console.log('Waiting for DB schema (app container migrations)...')
       await new Promise(r => setTimeout(r, 1000))
     }
   }
-  throw new Error('DB not ready after 60s')
+  throw new Error('DB schema not ready after 120s')
 }
 
 async function shutdown() {

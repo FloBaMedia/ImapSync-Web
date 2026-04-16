@@ -6,13 +6,12 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 
-# --shamefully-hoist: flat node_modules (real dirs, no symlinks) so COPY works
+# .npmrc has node-linker=hoisted -> flat node_modules with real files (no symlinks, no .pnpm store)
 RUN --mount=type=cache,id=pnpm,target=/pnpm-store \
     pnpm config set store-dir /pnpm-store && \
-    pnpm install --frozen-lockfile --shamefully-hoist && \
-    rm -rf node_modules/.pnpm
+    pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm exec prisma generate

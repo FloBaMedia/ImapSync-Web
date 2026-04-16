@@ -31,6 +31,10 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
       LOG_DIR: /shared/logs
       NODE_ENV: production
+      # Pin Next.js standalone server to the port we EXPOSE; otherwise
+      # Coolify's injected PORT (e.g. 3001) wins and breaks the proxy.
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
     depends_on:
       db:
         condition: service_healthy

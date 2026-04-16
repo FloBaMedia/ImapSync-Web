@@ -1,0 +1,12 @@
+node_modules/
+.next/
+src/generated/
+.git/
+.ai/
+.vscode/
+.idea/
+*.log
+.env
+.env.local
+.env.*.local
+README.md

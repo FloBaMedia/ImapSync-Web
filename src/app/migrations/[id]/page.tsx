@@ -142,6 +142,11 @@ export default function MigrationDetailPage() {
                   <button onClick={() => setShowSchedule(s => !s)} disabled={actionLoading} className="btn-secondary">
                     {showSchedule ? 'Cancel' : 'Schedule…'}
                   </button>
+                  {job.status === 'PENDING' && (
+                    <button onClick={() => router.push(`/migrations/${id}/edit`)} disabled={actionLoading} className="btn-secondary">
+                      Edit
+                    </button>
+                  )}
                 </>
               )}
               {job.status !== 'RUNNING' && (

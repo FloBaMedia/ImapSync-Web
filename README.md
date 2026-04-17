@@ -1,98 +1,114 @@
 # ImapSync Web
 
-A modern, self-hosted web UI for managing IMAP email migrations powered by [imapsync](https://imapsync.lamiral.info/). Built with Next.js 15, PostgreSQL 18, and Prisma.
+A modern, self-hosted web UI for managing IMAP email migrations powered by [imapsync](https://imapsync.lamiral.info/). Built with Next.js 16, PostgreSQL 18, and Prisma 7.
+
+> **Status:** beta. Battle-tested on small-to-medium migrations (dozens of mailboxes) but pre-1.0 — expect occasional breaking changes until then.
 
 ---
 
 ## Features
 
-- **Migration jobs** — Group multiple email accounts into a single migration job
-- **Server management** — Save reusable IMAP server configs with presets for IONOS, Gmail, Outlook, GMX, Web.de, Strato, MidWive, and more
-- **Live log streaming** — Watch imapsync output in real-time via Server-Sent Events (SSE), per account
-- **Parallel migrations** — Run up to 10 accounts concurrently with a configurable concurrency slider
-- **CSV import** — Import existing `user;pass;destUser;destPass` CSV files directly
-- **Full imapsync control** — Configure SSL, automap, subfolder prefix, folder exclusions, `--regextrans2` rules, and arbitrary extra args
-- **Retry failed accounts** — Re-run only failed/skipped accounts within a completed job
-- **Password encryption** — All IMAP passwords stored with AES-256-GCM encryption
-- **Authentication** — Single-user session-based login with JWT (httpOnly cookie)
-- **Dashboard** — Live statistics across all jobs and accounts with auto-refresh
+- **Migration jobs** — group multiple email accounts into a single migration
+- **Server presets** — reusable IMAP server configs with built-in defaults for IONOS, Gmail, Outlook, GMX, Web.de, Strato, and more
+- **Live log streaming** — watch `imapsync` output line-by-line via Server-Sent Events
+- **Parallel migrations** — configurable per-job concurrency (1–10) and a global runner cap
+- **Per-account overrides** — different `--subfolder2`, `--exclude`, `--regextrans2`, or extra args per account in the same job
+- **Scheduling** — start now, schedule for a specific time, queue (sequential within a queue group), or save as draft
+- **CSV import** — `source;sourcePass;dest;destPass` import directly from the new-migration page
+- **Retry failed accounts** — re-run only failed/skipped accounts within a completed job
+- **Encryption at rest** — IMAP passwords stored with AES-256-GCM
+- **Single-user auth** — JWT session in an httpOnly cookie, bcrypt-hashed admin password
+- **Crash recovery** — runner resets stuck accounts on restart; `imapsync` itself resumes safely (skips already-synced messages)
+
+---
+
+## Architecture
+
+Three Docker services:
+
+```
+┌────────────────────┐     ┌────────────────────┐     ┌────────────────────┐
+│   app (Next.js)    │     │   runner (Node)    │     │  db (PostgreSQL)   │
+│   UI + REST API    │◀───▶│   spawns imapsync  │◀───▶│                    │
+└────────────────────┘     └────────────────────┘     └────────────────────┘
+         │                          │                          ▲
+         └──────────── shared-logs volume ────────┘            │
+                              │                                │
+                       /shared/logs/{accountId}.log ───────────┘
+```
+
+- **app** owns the database schema (runs `prisma migrate deploy` on boot) and the HTTP API.
+- **runner** polls the DB every ~1s, promotes scheduled jobs, spawns one `imapsync` child per pending account (respecting per-job and global concurrency), and writes per-account log files to a shared volume.
+- **app** streams those log files to the browser via SSE.
+
+State and orchestration are entirely DB-mediated — runner crashes, restarts, and SIGTERMs are recovered on next boot without manual cleanup.
 
 ---
 
 ## Tech stack
 
-| Layer       | Technology                 |
-|-------------|---------------------------|
-| Frontend    | Next.js 15 (App Router)   |
-| Styling     | Tailwind CSS 3            |
-| Database    | PostgreSQL 18             |
-| ORM         | Prisma 6                  |
-| Auth        | JWT via `jose`            |
-| Sync engine | imapsync (system binary)  |
-| Runtime     | Node.js 22                |
-| Package mgr | pnpm 10                   |
+| Layer        | Technology                |
+|--------------|---------------------------|
+| Frontend     | Next.js 16 (App Router)   |
+| Styling      | Tailwind CSS 3            |
+| Database     | PostgreSQL 18             |
+| ORM          | Prisma 7 (`prisma-client`) |
+| Auth         | `jose` JWT                |
+| Sync engine  | `imapsync` binary         |
+| Runtime      | Node.js 22                |
+| Package mgr  | pnpm 10                   |
 
 ---
 
-## Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
-- That's it — imapsync, Node.js, and PostgreSQL all run inside containers
-
----
-
-## Quick start
+## Quick start (Docker Compose)
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-org/imapsync-web.git
+# 1. Clone
+git clone https://github.com/<your-org>/imapsync-web.git
 cd imapsync-web
 
-# 2. Create your environment file
-cp .env.example .env
+# 2. Generate secrets and create .env
+cat > .env <<EOF
+DB_PASSWORD=$(openssl rand -hex 16)
+JWT_SECRET=$(openssl rand -base64 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=$(openssl rand -base64 16)
+PORT=3000
+EOF
 
-# 3. Edit .env — at minimum change the secrets:
-#    ENCRYPTION_KEY=$(openssl rand -hex 32)
-#    JWT_SECRET=$(openssl rand -base64 32)
-#    ADMIN_EMAIL=you@example.com
-#    ADMIN_PASSWORD=a-strong-password
-
-# 4. Build and start
+# 3. Build and start
 docker compose up -d --build
 
-# 5. Open the UI
+# 4. Open the UI
 open http://localhost:3000
 ```
 
-On first boot the container will:
-1. Apply all database migrations automatically
-2. Create the admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
-3. Seed default imapsync settings
+The app refuses to start without `JWT_SECRET`, `ENCRYPTION_KEY`, `DB_PASSWORD`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`. Read the values you generated above to log in.
+
+On first boot the `app` container will:
+1. Apply all pending database migrations
+2. Create the admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (rejects passwords shorter than 8 chars or equal to `admin`/`password`)
+3. Seed default `imapsync` settings
 
 ---
 
 ## Configuration
 
-All configuration is done via environment variables. Copy `.env.example` to `.env` and adjust.
+All configuration is via environment variables. Copy `.env.example` to `.env` and fill it in.
 
-| Variable           | Default                     | Description |
-|--------------------|-----------------------------|-------------|
-| `DB_PASSWORD`      | `changeme`                  | PostgreSQL password |
-| `JWT_SECRET`       | *(insecure default)*        | Secret for signing session JWTs — **change in production** |
-| `ENCRYPTION_KEY`   | *(insecure default)*        | 64-char hex key (32 bytes) for AES-256-GCM password encryption — **change in production** |
-| `ADMIN_EMAIL`      | `admin@example.com`         | Login email for the web UI |
-| `ADMIN_PASSWORD`   | `admin`                     | Login password — **change in production** |
-| `PORT`             | `3000`                      | Host port the UI is exposed on |
+| Variable           | Required | Default        | Description |
+|--------------------|----------|----------------|-------------|
+| `DB_PASSWORD`      | yes      | —              | PostgreSQL password |
+| `JWT_SECRET`       | yes      | —              | Session JWT signing secret (≥32 chars). `openssl rand -base64 32` |
+| `ENCRYPTION_KEY`   | yes      | —              | AES-256-GCM key for IMAP passwords (64 hex chars). `openssl rand -hex 32` |
+| `ADMIN_EMAIL`      | yes      | —              | Initial admin login |
+| `ADMIN_PASSWORD`   | yes      | —              | Initial admin password (≥8 chars) |
+| `PORT`             | no       | `3000`         | Host port the UI is exposed on |
+| `POLL_INTERVAL_MS` | no       | `1000`         | Runner DB poll interval |
+| `MAX_PARALLEL`     | no       | `50`           | Global cap on concurrent `imapsync` processes |
 
-Generate secure secrets:
-
-```bash
-# ENCRYPTION_KEY (64 hex chars = 32 bytes)
-openssl rand -hex 32
-
-# JWT_SECRET
-openssl rand -base64 32
-```
+> **Rotating `ENCRYPTION_KEY` invalidates all stored IMAP passwords.** If you need to rotate it, plan re-encryption (decrypt with old key → encrypt with new key) or wipe and recreate accounts.
 
 ---
 
@@ -100,16 +116,18 @@ openssl rand -base64 32
 
 ```bash
 # Install dependencies
+corepack enable
 pnpm install
 
-# Start PostgreSQL (requires Docker)
+# Start PostgreSQL
 docker compose up db -d
 
-# Copy and configure env
+# Configure env
 cp .env.example .env
-# Set DATABASE_URL=postgresql://imapsync:changeme@localhost:5432/imapsync
+# Add: DATABASE_URL=postgresql://imapsync:<DB_PASSWORD>@localhost:5432/imapsync
+# Generate JWT_SECRET and ENCRYPTION_KEY (commands in .env.example)
 
-# Apply migrations and generate Prisma client
+# Apply migrations + generate Prisma client
 pnpm exec prisma migrate dev
 pnpm exec prisma generate
 
@@ -117,108 +135,91 @@ pnpm exec prisma generate
 pnpm dev
 ```
 
-The app is available at `http://localhost:3000`.
+The runner can be started locally too (requires `imapsync` on PATH):
+
+```bash
+ENCRYPTION_KEY=<your-key> DATABASE_URL=postgresql://... LOG_DIR=./logs \
+  node_modules/.bin/tsx scripts/runner.mjs
+```
 
 ### Database management
 
 ```bash
-# Open Prisma Studio (database GUI)
-pnpm db:studio
-
-# Create a new migration after schema changes
-pnpm exec prisma migrate dev --name your_migration_name
-
-# Apply migrations (production)
-pnpm db:migrate
+pnpm db:studio                                          # Prisma Studio UI
+pnpm exec prisma migrate dev --name your_change_name    # new migration
+pnpm db:migrate                                         # apply migrations (production)
 ```
 
 ---
 
 ## CSV import format
 
-The CSV importer on the "New migration" page accepts semicolon-separated files (compatible with the legacy `users.csv` format):
+The CSV importer on the "New migration" page accepts semicolon-separated files:
 
 ```
 sourceEmail;sourcePassword;destEmail;destPassword
 user@old-domain.com;secret123;user@new-domain.com;newsecret456
 ```
 
-- Lines starting with `#` are treated as comments and skipped
-- Quoted values and Windows line endings (CRLF) are handled automatically
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                  Docker Compose                      │
-│                                                      │
-│  ┌──────────────────┐      ┌──────────────────────┐  │
-│  │   app (Next.js)  │─────▶│  db (PostgreSQL 18)  │  │
-│  │   Node.js 22     │      └──────────────────────┘  │
-│  │   imapsync bin   │                                 │
-│  └──────────────────┘                                │
-└─────────────────────────────────────────────────────┘
-```
-
-**Request flow for a migration:**
-
-1. User creates a job via the UI → API stores job + encrypted accounts in PostgreSQL
-2. User clicks "Start" → `POST /api/migrations/:id/start` fires `startJob()` in the background
-3. `startJob()` spawns one `imapsync` child process per account (respecting concurrency limit)
-4. stdout/stderr lines are emitted to an in-memory `EventEmitter` keyed by `accountId`
-5. Log lines are flushed to PostgreSQL in batches every 2 seconds
-6. The log viewer connects to `GET /api/migrations/:id/accounts/:accountId/stream` (SSE), which subscribes to the EventEmitter and streams lines to the browser in real-time
-7. On process exit, account status (`SUCCESS` / `FAILED`) is written to the database
-
-**Security notes:**
-
-- IMAP passwords are encrypted with AES-256-GCM before being stored; the key never leaves the server
-- Sessions are short-lived JWTs stored in httpOnly cookies (7-day expiry)
-- All routes except `/login` are protected by middleware
+- Lines starting with `#` are treated as comments and skipped.
+- Quoted values and Windows line endings (CRLF) are handled automatically.
 
 ---
 
 ## Deployment notes
 
-- The container runs as a **standalone Next.js** build (`output: 'standalone'`), so no separate Node.js install is needed on the host
-- The `entrypoint.sh` script runs `prisma migrate deploy` on every container start — safe to run on a live database
-- **Reverse proxy**: put Nginx or Traefik in front for HTTPS and domain routing. Pass `X-Forwarded-Proto` and set `secure: true` for cookies in production
-- **Backups**: only the `pgdata` volume needs to be backed up; all migration logs and config live in PostgreSQL
+- The `app` container builds in Next.js **standalone** mode — no separate Node.js install needed on the host.
+- `entrypoint-app.sh` runs `prisma migrate deploy` on every container start (idempotent and safe on a live DB).
+- Put a reverse proxy (Nginx, Traefik, Caddy) in front for HTTPS. SSE responses **must not be buffered** — see the snippet below.
+- Only the `pgdata` volume needs backups. Per-account log files in `shared-logs` are reconstructable.
+- The runner spawns child processes — give it CPU and memory headroom proportional to `MAX_PARALLEL`.
 
-### Example Nginx config snippet
+### Nginx snippet (HTTPS + SSE-friendly)
 
 ```nginx
 server {
-    listen 443 ssl;
-    server_name imapsync.yourdomain.com;
+    listen 443 ssl http2;
+    server_name imapsync.example.com;
 
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
-        # Required for SSE (live logs)
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        # Required for SSE log streaming
         proxy_buffering off;
         proxy_cache off;
         proxy_set_header Connection '';
         chunked_transfer_encoding on;
+        proxy_read_timeout 24h;
     }
 }
 ```
+
+### Coolify
+
+The included `docker-compose.yml` works as-is on Coolify. Set all five required env vars in the Coolify UI before the first deploy. Pinning `PORT: 3000` and `HOSTNAME: 0.0.0.0` in compose overrides Coolify's injected `PORT` and ensures Traefik finds the upstream.
+
+---
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for the security model, threat boundaries, and how to report vulnerabilities.
+
+Short version: **deploy behind a trusted boundary** (private network or auth-proxied HTTPS). The single-admin design is intentional but means the admin login is equivalent to root on the runner.
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please open an issue first to discuss what you'd like to change.
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feat/your-feature`
-3. Commit your changes: `git commit -m 'feat: add your feature'`
-4. Push and open a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md). PRs welcome — please open an issue first for non-trivial changes.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
+
+`imapsync` itself is licensed separately under the NOLIMIT license by Gilles Lamiral.

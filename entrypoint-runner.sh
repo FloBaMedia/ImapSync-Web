@@ -3,10 +3,11 @@ set -e
 
 cd /app
 
-if [ -z "$DATABASE_URL" ]; then
-  echo "❌  DATABASE_URL is not set. Aborting."
-  exit 1
-fi
+fail() { echo "$1" >&2; exit 1; }
 
-echo "🏃  Starting imapsync runner..."
+[ -n "$DATABASE_URL" ]            || fail "FATAL: DATABASE_URL is not set."
+[ -n "$ENCRYPTION_KEY" ]          || fail "FATAL: ENCRYPTION_KEY is not set (must match the app container)."
+[ ${#ENCRYPTION_KEY} -ge 64 ]     || fail "FATAL: ENCRYPTION_KEY must be 64 hex characters (32 bytes)."
+
+echo "Starting imapsync runner..."
 exec node_modules/.bin/tsx /app/scripts/runner.mjs

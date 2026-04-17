@@ -11,9 +11,9 @@ export async function POST(
     select: { status: true },
   })
 
-  if (!job) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 })
+  if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   if (job.status !== 'RUNNING') {
-    return NextResponse.json({ error: 'Job läuft nicht' }, { status: 409 })
+    return NextResponse.json({ error: 'Job is not running' }, { status: 409 })
   }
 
   // Signal runner to SIGTERM the imapsync child for each running account.

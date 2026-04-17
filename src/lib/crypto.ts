@@ -3,7 +3,13 @@ import crypto from 'crypto'
 const ALGORITHM = 'aes-256-gcm'
 
 function getKey(): Buffer {
-  const hex = process.env.ENCRYPTION_KEY ?? 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9'
+  const hex = process.env.ENCRYPTION_KEY
+  if (!hex || hex.length < 64) {
+    throw new Error(
+      'ENCRYPTION_KEY environment variable is missing or too short. ' +
+      'Generate one with: openssl rand -hex 32'
+    )
+  }
   return Buffer.from(hex, 'hex').slice(0, 32)
 }
 
@@ -20,7 +26,9 @@ export function encrypt(text: string): string {
 export function decrypt(data: string): string {
   const key = getKey()
   const parts = data.split(':')
-  if (parts.length !== 3) return data // fallback for unencrypted legacy data
+  if (parts.length !== 3) {
+    throw new Error('Encrypted payload is malformed (expected iv:tag:ciphertext)')
+  }
   const [ivB64, tagB64, encrypted] = parts
   const iv = Buffer.from(ivB64, 'base64')
   const tag = Buffer.from(tagB64, 'base64')

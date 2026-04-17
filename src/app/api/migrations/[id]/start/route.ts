@@ -25,9 +25,9 @@ export async function POST(
     select: { status: true },
   })
 
-  if (!job) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 })
+  if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   if (job.status === 'RUNNING') {
-    return NextResponse.json({ error: 'Job läuft bereits' }, { status: 409 })
+    return NextResponse.json({ error: 'Job is already running' }, { status: 409 })
   }
 
   // Reset finished/aborted accounts to PENDING when re-running

@@ -17,8 +17,16 @@ const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
 try {
-  const email = process.env.ADMIN_EMAIL || 'admin@example.com'
-  const password = process.env.ADMIN_PASSWORD || 'admin'
+  const email = process.env.ADMIN_EMAIL
+  const password = process.env.ADMIN_PASSWORD
+  if (!email || !password) {
+    console.error('FATAL: ADMIN_EMAIL and ADMIN_PASSWORD must both be set on first boot.')
+    process.exit(1)
+  }
+  if (password.length < 8 || password === 'admin' || password === 'password') {
+    console.error('FATAL: ADMIN_PASSWORD must be at least 8 characters and not a common default.')
+    process.exit(1)
+  }
   const existing = await prisma.adminUser.findUnique({ where: { email } })
   if (!existing) {
     const passwordHash = bcrypt.hashSync(password, 12)

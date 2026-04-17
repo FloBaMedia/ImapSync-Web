@@ -5,9 +5,14 @@ import { NextRequest } from 'next/server'
 export const COOKIE_NAME = 'imapsync_session'
 
 function getSecret(): Uint8Array {
-  return new TextEncoder().encode(
-    process.env.JWT_SECRET ?? 'change-this-jwt-secret-in-production-min-32-chars'
-  )
+  const secret = process.env.JWT_SECRET
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      'JWT_SECRET environment variable is missing or shorter than 32 characters. ' +
+      'Generate one with: openssl rand -base64 32'
+    )
+  }
+  return new TextEncoder().encode(secret)
 }
 
 export interface SessionPayload {

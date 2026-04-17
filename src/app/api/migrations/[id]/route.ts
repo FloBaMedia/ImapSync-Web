@@ -26,7 +26,7 @@ export async function GET(
     },
   })
 
-  if (!job) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 })
+  if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   return NextResponse.json(job)
 }
 
@@ -36,9 +36,9 @@ export async function DELETE(
 ) {
   const { id } = await params
   const job = await prisma.migrationJob.findUnique({ where: { id } })
-  if (!job) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 })
+  if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   if (job.status === 'RUNNING') {
-    return NextResponse.json({ error: 'Laufende Jobs können nicht gelöscht werden' }, { status: 409 })
+    return NextResponse.json({ error: 'Cannot delete a running job' }, { status: 409 })
   }
   await prisma.migrationJob.delete({ where: { id } })
   return NextResponse.json({ ok: true })

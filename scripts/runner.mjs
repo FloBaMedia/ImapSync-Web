@@ -26,15 +26,21 @@ const prisma = new PrismaClient({ adapter })
 const processes = new Map()
 
 const ALGORITHM = 'aes-256-gcm'
+const ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_KEY
+if (!ENCRYPTION_KEY_HEX || ENCRYPTION_KEY_HEX.length < 64) {
+  console.error('FATAL: ENCRYPTION_KEY env var is missing or shorter than 64 hex chars.')
+  console.error('Generate one with: openssl rand -hex 32')
+  process.exit(1)
+}
+const ENCRYPTION_KEY = Buffer.from(ENCRYPTION_KEY_HEX, 'hex').slice(0, 32)
+
 function decryptPassword(data) {
-  const hex = process.env.ENCRYPTION_KEY ?? 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9'
-  const key = Buffer.from(hex, 'hex').slice(0, 32)
   const parts = data.split(':')
-  if (parts.length !== 3) return data
+  if (parts.length !== 3) throw new Error('Encrypted payload is malformed')
   const [ivB64, tagB64, encrypted] = parts
   const iv = Buffer.from(ivB64, 'base64')
   const tag = Buffer.from(tagB64, 'base64')
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
+  const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv)
   decipher.setAuthTag(tag)
   let decrypted = decipher.update(encrypted, 'base64', 'utf8')
   decrypted += decipher.final('utf8')

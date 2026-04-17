@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: imapsync
       POSTGRES_USER: imapsync
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,15 +24,15 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://imapsync:${DB_PASSWORD:-changeme}@db:5432/imapsync
-      JWT_SECRET: ${JWT_SECRET:-change-this-jwt-secret-in-production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      DATABASE_URL: postgresql://imapsync:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/imapsync
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (run: openssl rand -base64 32)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (run: openssl rand -hex 32)}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?ADMIN_EMAIL is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
       LOG_DIR: /shared/logs
       NODE_ENV: production
       # Pin Next.js standalone server to the port we EXPOSE; otherwise
-      # Coolify's injected PORT (e.g. 3001) wins and breaks the proxy.
+      # platform-injected PORT vars (e.g. Coolify's 3001) win and break the proxy.
       PORT: 3000
       HOSTNAME: 0.0.0.0
     depends_on:
@@ -47,8 +47,8 @@ services:
       target: runner
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://imapsync:${DB_PASSWORD:-changeme}@db:5432/imapsync
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9}
+      DATABASE_URL: postgresql://imapsync:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/imapsync
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required (must match app)}
       LOG_DIR: /shared/logs
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-1000}
       MAX_PARALLEL: ${MAX_PARALLEL:-50}

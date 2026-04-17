@@ -10,8 +10,8 @@ Be respectful. Discriminatory, harassing, or hostile behavior is not tolerated i
 
 ```bash
 # 1. Fork & clone
-git clone https://github.com/<your-username>/imapsync-web.git
-cd imapsync-web
+git clone https://github.com/<your-username>/ImapSync-Web.git
+cd ImapSync-Web
 
 # 2. Install dependencies (pnpm 10+)
 corepack enable

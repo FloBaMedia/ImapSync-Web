@@ -8,17 +8,53 @@ A modern, self-hosted web UI for managing IMAP email migrations powered by [imap
 
 ## Features
 
-- **Migration jobs** — group multiple email accounts into a single migration
-- **Server presets** — reusable IMAP server configs with built-in defaults for IONOS, Gmail, Outlook, GMX, Web.de, Strato, and more
-- **Live log streaming** — watch `imapsync` output line-by-line via Server-Sent Events
-- **Parallel migrations** — configurable per-job concurrency (1–10) and a global runner cap
-- **Per-account overrides** — different `--subfolder2`, `--exclude`, `--regextrans2`, or extra args per account in the same job
-- **Scheduling** — start now, schedule for a specific time, queue (sequential within a queue group), or save as draft
-- **CSV import** — `source;sourcePass;dest;destPass` import directly from the new-migration page
-- **Retry failed accounts** — re-run only failed/skipped accounts within a completed job
-- **Encryption at rest** — IMAP passwords stored with AES-256-GCM
-- **Single-user auth** — JWT session in an httpOnly cookie, bcrypt-hashed admin password
-- **Crash recovery** — runner resets stuck accounts on restart; `imapsync` itself resumes safely (skips already-synced messages)
+### Migration jobs
+
+- **Job-based grouping** — bundle dozens of email accounts into a single migration with a shared name, source server, destination server, and option set
+- **Connection test** — one-click "⚡" button per account row tests both the source and destination IMAP login in parallel before you start the job (works on existing draft accounts using stored credentials too — no need to retype passwords)
+- **CSV import** — paste a `source;sourcePass;dest;destPass` file straight into the new-migration page; comments (`#`) and CRLF line endings are handled automatically
+- **Retry failed accounts** — re-run only the FAILED / SKIPPED rows of a finished job without touching the successful ones
+- **Live log streaming** — every account exposes its own live `imapsync` log via Server-Sent Events
+- **Per-job stats and progress bar** — live counts of total / success / failed / running / pending accounts plus an animated progress bar
+
+### Scheduling and queuing
+
+- **Start now** — kick off immediately
+- **Schedule for a specific time** — runner picks the job up automatically when the time arrives
+- **Queue groups** — jobs sharing a queue name run sequentially, jobs without a queue name run in parallel
+- **Save as draft** — store a job without starting it
+- **Edit drafts** — drafts can be reopened and reworked (servers, options, accounts, schedule mode) before being started; existing account passwords are preserved when left blank
+
+### imapsync options
+
+- **Defaults from settings** — the global `Settings` page seeds sane defaults (`--ssl1`, `--ssl2`, `--automap`, `--addheader`, `--syncinternaldates`, `--useuid`, `--exclude`, `--regextrans2`, etc.)
+- **Per-job overrides** — every option on the new/edit migration form overrides the defaults for that one job
+- **Per-account overrides** — `--subfolder2`, `--exclude`, `--regextrans2`, and arbitrary extra args can be set per individual account inside the same job (gear icon "⚙" on each row)
+- **Configurable concurrency** — per-job slider (1–10 parallel accounts) plus a global `MAX_PARALLEL` cap on the runner
+
+### Server presets
+
+Reusable IMAP server configurations with one-click presets for:
+
+- IONOS, Strato, mail.de, GMX, Web.de
+- Gmail / Google Workspace
+- Outlook / Microsoft 365
+- Custom (raw host / port / SSL toggle / auth mech)
+
+### Operations
+
+- **Live dashboard** — running, queued, scheduled, and recent jobs at a glance
+- **DB-mediated orchestration** — runner crashes, restarts, and SIGTERMs are recovered on the next boot without manual cleanup
+- **Crash recovery** — stuck accounts are reset on runner startup; `imapsync` itself resumes safely on retry (already-synced messages are skipped)
+- **Per-account log files** — written to a shared volume; reconstructable, browser-streamable, and survive runner restarts
+
+### Security
+
+- **Encryption at rest** — IMAP passwords stored with AES-256-GCM, key in `ENCRYPTION_KEY`
+- **JWT sessions** — `jose`-signed, httpOnly cookie
+- **bcrypt admin password** — set via `ADMIN_EMAIL` / `ADMIN_PASSWORD` on first boot, weak passwords (`admin`, `password`, < 8 chars) are rejected
+- **Fail-fast secrets** — the app, the runner, and the docker-compose stack all refuse to start if any required secret is missing or too short
+- **Single-user auth model** — one admin owns everything; no multi-tenancy, no role tiers (deploy behind a trusted boundary, see [SECURITY.md](SECURITY.md))
 
 ---
 
@@ -64,8 +100,8 @@ State and orchestration are entirely DB-mediated — runner crashes, restarts, a
 
 ```bash
 # 1. Clone
-git clone https://github.com/<your-org>/imapsync-web.git
-cd imapsync-web
+git clone https://github.com/FloBaMedia/ImapSync-Web.git
+cd ImapSync-Web
 
 # 2. Generate secrets and create .env
 cat > .env <<EOF

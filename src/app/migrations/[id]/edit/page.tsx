@@ -6,6 +6,7 @@ import { Nav } from '@/components/Nav'
 
 interface Server { id: string; name: string; host: string; preset: string | null }
 interface AccountOptions { subfolder2?: string; exclude?: string; regextrans2?: string; extraArgs?: string }
+interface SideTestResult { ok: boolean; error?: string }
 interface AccountRow {
   id?: string                  // existing rows have an id; new rows don't
   sourceEmail: string
@@ -14,6 +15,8 @@ interface AccountRow {
   destPass: string             // blank for existing rows = keep current
   options?: AccountOptions
   expanded?: boolean
+  testing?: boolean
+  testResult?: { source: SideTestResult; dest: SideTestResult }
 }
 
 const ACCOUNT_OVERRIDABLE: Array<[keyof AccountOptions, string, string]> = [
@@ -124,6 +127,44 @@ export default function EditMigrationPage() {
     }))
   const countOverrides = (opts?: AccountOptions) =>
     opts ? Object.values(opts).filter(v => v && String(v).trim()).length : 0
+
+  const testRow = async (i: number) => {
+    const row = accounts[i]
+    if (!sourceServerId || !destServerId) { setError('Pick source and destination servers before testing.'); return }
+    if (!row.sourceEmail || !row.destEmail) { setError('Both emails are required.'); return }
+    setError('')
+    setAccounts(a => a.map((r, idx) => idx === i ? { ...r, testing: true, testResult: undefined } : r))
+
+    const callTest = (payload: Record<string, unknown>) =>
+      fetch('/api/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(r => r.json() as Promise<SideTestResult>)
+        .catch(e => ({ ok: false, error: (e as Error).message }))
+
+    // For existing rows: blank password = use stored creds via accountId
+    // For new/edited rows: send the typed password
+    const sourcePayload = row.sourcePass
+      ? { serverId: sourceServerId, email: row.sourceEmail, password: row.sourcePass }
+      : row.id
+        ? { accountId: row.id, side: 'source' }
+        : null
+    const destPayload = row.destPass
+      ? { serverId: destServerId, email: row.destEmail, password: row.destPass }
+      : row.id
+        ? { accountId: row.id, side: 'dest' }
+        : null
+
+    if (!sourcePayload || !destPayload) {
+      setError('New rows need both passwords filled in before testing.')
+      setAccounts(a => a.map((r, idx) => idx === i ? { ...r, testing: false } : r))
+      return
+    }
+
+    const [source, dest] = await Promise.all([callTest(sourcePayload), callTest(destPayload)])
+    setAccounts(a => a.map((r, idx) => idx === i ? { ...r, testing: false, testResult: { source, dest } } : r))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -268,6 +309,9 @@ export default function EditMigrationPage() {
                             <input value={row.destEmail} onChange={e => updateRow(i, 'destEmail', e.target.value)} className="input text-xs" placeholder="user@dest.com" />
                             <div className="flex gap-1.5">
                               <input type="password" value={row.destPass} onChange={e => updateRow(i, 'destPass', e.target.value)} className="input text-xs" placeholder={isExisting ? 'Keep current' : 'Password'} />
+                              <button type="button" onClick={() => testRow(i)} disabled={row.testing} title="Test both IMAP logins" className="text-xs px-2 shrink-0 rounded border border-gray-700 text-gray-500 hover:text-blue-400 disabled:opacity-50">
+                                {row.testing ? '…' : '⚡'}
+                              </button>
                               <button type="button" onClick={() => toggleExpand(i)} title="Per-account options" className={`text-xs px-2 shrink-0 rounded border ${overrides > 0 ? 'border-purple-600/40 text-purple-400 bg-purple-600/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
                                 ⚙{overrides > 0 && <span className="ml-1">{overrides}</span>}
                               </button>
@@ -276,6 +320,16 @@ export default function EditMigrationPage() {
                               )}
                             </div>
                           </div>
+                          {row.testResult && (
+                            <div className="ml-2 pl-3 border-l-2 border-blue-600/30 py-1.5 space-y-1 bg-[#0e0e1a] rounded-r text-xs">
+                              <div className={row.testResult.source.ok ? 'text-green-400' : 'text-red-400'}>
+                                {row.testResult.source.ok ? '✓' : '✗'} Source login{row.testResult.source.error ? ` — ${row.testResult.source.error}` : ' OK'}
+                              </div>
+                              <div className={row.testResult.dest.ok ? 'text-green-400' : 'text-red-400'}>
+                                {row.testResult.dest.ok ? '✓' : '✗'} Destination login{row.testResult.dest.error ? ` — ${row.testResult.dest.error}` : ' OK'}
+                              </div>
+                            </div>
+                          )}
                           {row.expanded && (
                             <div className="ml-2 pl-3 border-l-2 border-purple-600/30 py-2 space-y-2 bg-[#0e0e1a] rounded-r">
                               <p className="text-xs text-gray-500">Per-account overrides — leave empty to use the job&apos;s default.</p>

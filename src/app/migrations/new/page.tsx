@@ -6,7 +6,17 @@ import { Nav } from '@/components/Nav'
 
 interface Server { id: string; name: string; host: string; preset: string | null }
 interface AccountOptions { subfolder2?: string; exclude?: string; regextrans2?: string; extraArgs?: string }
-interface AccountRow { sourceEmail: string; sourcePass: string; destEmail: string; destPass: string; options?: AccountOptions; expanded?: boolean }
+interface SideTestResult { ok: boolean; error?: string }
+interface AccountRow {
+  sourceEmail: string
+  sourcePass: string
+  destEmail: string
+  destPass: string
+  options?: AccountOptions
+  expanded?: boolean
+  testing?: boolean
+  testResult?: { source: SideTestResult; dest: SideTestResult }
+}
 
 const ACCOUNT_OVERRIDABLE: Array<[keyof AccountOptions, string, string]> = [
   ['subfolder2',  '--subfolder2',  'e.g. Archive — overrides job default'],
@@ -92,6 +102,28 @@ export default function NewMigrationPage() {
     }))
   const countOverrides = (opts?: AccountOptions) =>
     opts ? Object.values(opts).filter(v => v && String(v).trim()).length : 0
+
+  const testRow = async (i: number) => {
+    const row = accounts[i]
+    if (!sourceServerId || !destServerId) { setError('Pick source and destination servers before testing.'); return }
+    if (!row.sourceEmail || !row.sourcePass || !row.destEmail || !row.destPass) {
+      setError('Fill both emails and both passwords before testing.'); return
+    }
+    setError('')
+    setAccounts(a => a.map((r, idx) => idx === i ? { ...r, testing: true, testResult: undefined } : r))
+    const post = (serverId: string, email: string, password: string) =>
+      fetch('/api/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId, email, password }),
+      }).then(r => r.json() as Promise<SideTestResult>)
+        .catch(e => ({ ok: false, error: (e as Error).message }))
+    const [source, dest] = await Promise.all([
+      post(sourceServerId, row.sourceEmail, row.sourcePass),
+      post(destServerId,   row.destEmail,   row.destPass),
+    ])
+    setAccounts(a => a.map((r, idx) => idx === i ? { ...r, testing: false, testResult: { source, dest } } : r))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -230,6 +262,9 @@ export default function NewMigrationPage() {
                             <input value={row.destEmail} onChange={e => updateRow(i, 'destEmail', e.target.value)} className="input text-xs" placeholder="user@dest.com" />
                             <div className="flex gap-1.5">
                               <input type="password" value={row.destPass} onChange={e => updateRow(i, 'destPass', e.target.value)} className="input text-xs" placeholder="Password" />
+                              <button type="button" onClick={() => testRow(i)} disabled={row.testing} title="Test both IMAP logins" className="text-xs px-2 shrink-0 rounded border border-gray-700 text-gray-500 hover:text-blue-400 disabled:opacity-50">
+                                {row.testing ? '…' : '⚡'}
+                              </button>
                               <button type="button" onClick={() => toggleExpand(i)} title="Per-account options" className={`text-xs px-2 shrink-0 rounded border ${overrides > 0 ? 'border-purple-600/40 text-purple-400 bg-purple-600/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
                                 ⚙{overrides > 0 && <span className="ml-1">{overrides}</span>}
                               </button>
@@ -238,6 +273,16 @@ export default function NewMigrationPage() {
                               )}
                             </div>
                           </div>
+                          {row.testResult && (
+                            <div className="ml-2 pl-3 border-l-2 border-blue-600/30 py-1.5 space-y-1 bg-[#0e0e1a] rounded-r text-xs">
+                              <div className={row.testResult.source.ok ? 'text-green-400' : 'text-red-400'}>
+                                {row.testResult.source.ok ? '✓' : '✗'} Source login{row.testResult.source.error ? ` — ${row.testResult.source.error}` : ' OK'}
+                              </div>
+                              <div className={row.testResult.dest.ok ? 'text-green-400' : 'text-red-400'}>
+                                {row.testResult.dest.ok ? '✓' : '✗'} Destination login{row.testResult.dest.error ? ` — ${row.testResult.dest.error}` : ' OK'}
+                              </div>
+                            </div>
+                          )}
                           {row.expanded && (
                             <div className="ml-2 pl-3 border-l-2 border-purple-600/30 py-2 space-y-2 bg-[#0e0e1a] rounded-r">
                               <p className="text-xs text-gray-500">Per-account overrides — leave empty to use the job&apos;s default.</p>

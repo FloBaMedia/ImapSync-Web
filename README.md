@@ -238,6 +238,11 @@ server {
 
 The included `docker-compose.yml` works as-is on Coolify. Set all five required env vars in the Coolify UI before the first deploy. Pinning `PORT: 3000` and `HOSTNAME: 0.0.0.0` in compose overrides Coolify's injected `PORT` and ensures Traefik finds the upstream.
 
+**Gotchas**
+
+- Coolify keeps a per-service "deploy this" toggle in its own database. After certain compose changes it can reset that selection; the deploy then dies immediately with `Error: no service selected`. Open the resource → Configuration → Services and re-enable `db`, `app`, and `runner`.
+- Required env vars are validated by the entrypoint scripts (and by `init.mjs` for the admin user), not by the compose file. The container will exit on the first boot with a `FATAL:` line in the logs if anything is missing or too short.
+
 ---
 
 ## Security

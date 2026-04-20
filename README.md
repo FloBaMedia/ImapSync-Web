@@ -242,6 +242,18 @@ The included `docker-compose.yml` works as-is on Coolify. Set all five required 
 
 - Coolify keeps a per-service "deploy this" toggle in its own database. After certain compose changes it can reset that selection; the deploy then dies immediately with `Error: no service selected`. Open the resource → Configuration → Services and re-enable `db`, `app`, and `runner`.
 - Required env vars are validated by the entrypoint scripts (and by `init.mjs` for the admin user), not by the compose file. The container will exit on the first boot with a `FATAL:` line in the logs if anything is missing or too short.
+- Volumes are pinned to fixed names (`imapsync_pgdata`, `imapsync_shared_logs`) via the `name:` field in `docker-compose.yml`. This bypasses Coolify's per-project volume namespace so a redeploy never silently swaps in a fresh empty database. If you run multiple ImapSync Web instances on the same Coolify host, change those names per-instance.
+
+### Using an external Postgres
+
+If you'd rather let Coolify (or a managed service) own Postgres separately:
+
+1. Create a Postgres resource in Coolify (or use an external host).
+2. Comment out the `db:` service block and the `depends_on: db:` lines in `docker-compose.yml`.
+3. Set `DATABASE_URL` directly in the Coolify env vars to your external connection string, e.g. `postgresql://user:pass@host:5432/imapsync`.
+4. Drop the `${DB_PASSWORD}` substitution from the `DATABASE_URL` lines, or remove `DB_PASSWORD` from your env entirely.
+
+Backups, version upgrades, and replication then become Postgres' responsibility, not the app's.
 
 ---
 

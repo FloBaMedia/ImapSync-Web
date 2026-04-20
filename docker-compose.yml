@@ -60,5 +60,11 @@ services:
       - shared-logs:/shared/logs
 
 volumes:
+  # Explicit `name:` keys bypass Compose's project-name prefix so the
+  # actual Docker volumes stay `imapsync_pgdata` / `imapsync_shared_logs`
+  # regardless of the project name an orchestrator (e.g. Coolify) uses.
+  # This is critical for data durability across redeploys.
   pgdata:
+    name: imapsync_pgdata
   shared-logs:
+    name: imapsync_shared_logs

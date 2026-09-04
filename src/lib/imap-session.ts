@@ -136,29 +136,41 @@ class ImapSession {
     this.socket.write(line + '\r\n')
   }
 
-  waitForTag(tag: string, label: string, timeoutMs = this.timeoutMs): Promise<string[]> {
-    return new Promise((resolve, reject) => {
+  waitForTag(tag: string, label: string, timeoutMs = this.timeoutMs): {
+    promise: Promise<string[]>
+    cancel: () => void
+  } {
+    let cancel = () => {}
+    const promise = new Promise<string[]>((resolve, reject) => {
       const timer = setTimeout(() => {
         const idx = this.waiters.findIndex(w => w.tag === tag)
         if (idx >= 0) this.waiters.splice(idx, 1)
         reject(new Error(`IMAP timed out: ${label}`))
       }, timeoutMs)
-      this.waiters.push({
+      const waiter = {
         tag,
-        resolve: lines => {
+        resolve: (lines: string[]) => {
           clearTimeout(timer)
           resolve(lines)
         },
         reject,
-      })
+      }
+      this.waiters.push(waiter)
+      cancel = () => {
+        clearTimeout(timer)
+        const idx = this.waiters.indexOf(waiter)
+        if (idx >= 0) this.waiters.splice(idx, 1)
+        resolve([])
+      }
     })
+    return { promise, cancel }
   }
 
   command(cmd: string, timeoutMs = this.timeoutMs): Promise<string[]> {
     const tag = this.nextTag()
-    const pending = this.waitForTag(tag, cmd.split(' ')[0], timeoutMs)
+    const { promise } = this.waitForTag(tag, cmd.split(' ')[0], timeoutMs)
     this.send(`${tag} ${cmd}`)
-    return pending
+    return promise
   }
 
   async commands(cmds: string[], timeoutMs = this.timeoutMs): Promise<string[]> {
@@ -166,16 +178,23 @@ class ImapSession {
     // the same socket chunk as an earlier OK still match their tag.
     const pending = cmds.map(cmd => {
       const tag = this.nextTag()
-      return { tag, cmd, waiter: this.waitForTag(tag, cmd.split(' ')[0], timeoutMs) }
+      const { promise, cancel } = this.waitForTag(tag, cmd.split(' ')[0], timeoutMs)
+      return { tag, cmd, promise, cancel }
     })
     for (const { tag, cmd } of pending) {
       this.send(`${tag} ${cmd}`)
     }
     const collected: string[] = []
-    for (const { waiter } of pending) {
-      collected.push(...await waiter)
+    try {
+      for (const item of pending) {
+        collected.push(...await item.promise)
+      }
+      return collected
+    } catch (err) {
+      for (const item of pending) item.cancel()
+      if (collected.length > 0) return collected
+      throw err
     }
-    return collected
   }
 
   waitGreeting(): Promise<string> {

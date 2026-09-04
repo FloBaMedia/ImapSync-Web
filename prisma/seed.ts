@@ -24,6 +24,7 @@ async function main() {
     { key: 'ssl1', value: 'true' },
     { key: 'ssl2', value: 'true' },
     { key: 'automap', value: 'true' },
+    { key: 'subscribe', value: 'true' },
     { key: 'addheader', value: 'true' },
     { key: 'syncinternaldates', value: 'true' },
     { key: 'useuid', value: 'true' },

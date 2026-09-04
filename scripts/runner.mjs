@@ -60,6 +60,7 @@ function buildArgs(job, account, options) {
   if (options.subfolder2) args.push('--subfolder2', options.subfolder2)
   if (options.exclude) args.push('--exclude', options.exclude)
   if (options.automap !== false) args.push('--automap')
+  if (options.subscribe !== false) args.push('--subscribe')
   if (options.addheader !== false) args.push('--addheader')
   if (options.syncinternaldates !== false) args.push('--syncinternaldates')
   if (options.useuid !== false) args.push('--useuid')

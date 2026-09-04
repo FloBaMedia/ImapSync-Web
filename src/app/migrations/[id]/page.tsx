@@ -265,11 +265,19 @@ export default function MigrationDetailPage() {
                     <td className="px-5 py-3"><StatusBadge status={account.status} /></td>
                     <td className="px-5 py-3 text-xs text-gray-500">{formatDuration(account.startedAt, account.finishedAt)}</td>
                     <td className="px-5 py-3">
-                      {(account.status !== 'PENDING' && account.status !== 'SKIPPED') && (
-                        <button onClick={() => setLogAccount(account)} className="btn-secondary text-xs px-3 py-1.5">
-                          {account.status === 'RUNNING' ? '📡 Live log' : '📄 View log'}
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => router.push(`/migrations/${id}/accounts/${account.id}?tab=${['SUCCESS', 'FAILED', 'STOPPED', 'COMPLETED'].includes(account.status) ? 'compare' : 'browse'}`)}
+                          className="btn-secondary text-xs px-3 py-1.5"
+                        >
+                          {['SUCCESS', 'FAILED', 'STOPPED'].includes(account.status) ? 'Compare folders' : 'Browse folders'}
                         </button>
-                      )}
+                        {(account.status !== 'PENDING' && account.status !== 'SKIPPED') && (
+                          <button onClick={() => setLogAccount(account)} className="btn-secondary text-xs px-3 py-1.5">
+                            {account.status === 'RUNNING' ? 'Live log' : 'View log'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

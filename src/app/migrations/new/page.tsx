@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Nav } from '@/components/Nav'
+import { FolderBrowseButton, MailboxInspector } from '@/components/MailboxInspector'
+import type { MailboxMapOptions } from '@/lib/mailbox-types'
 
 interface Server { id: string; name: string; host: string; preset: string | null }
 interface AccountOptions { subfolder2?: string; exclude?: string; regextrans2?: string; extraArgs?: string }
@@ -26,7 +28,7 @@ const ACCOUNT_OVERRIDABLE: Array<[keyof AccountOptions, string, string]> = [
 ]
 
 const defaultOptions = {
-  ssl1: true, ssl2: true, automap: true, addheader: true,
+  ssl1: true, ssl2: true, automap: true, subscribe: true, addheader: true,
   syncinternaldates: true, useuid: true,
   subfolder2: '', exclude: '(?i)Spam|Trash|Junk',
   regextrans2: '', extraArgs: '',
@@ -47,6 +49,7 @@ export default function NewMigrationPage() {
   const [queueGroup, setQueueGroup] = useState('')
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'accounts' | 'options'>('accounts')
+  const [browseIndex, setBrowseIndex] = useState<number | null>(null)
 
   useEffect(() => {
     fetch('/api/servers').then(r => r.json()).then((data: Server[]) => {
@@ -57,7 +60,7 @@ export default function NewMigrationPage() {
     fetch('/api/settings').then(r => r.json()).then((s: Record<string, string>) => {
       setOptions({
         ssl1: s.ssl1 !== 'false', ssl2: s.ssl2 !== 'false',
-        automap: s.automap !== 'false', addheader: s.addheader !== 'false',
+        automap: s.automap !== 'false', subscribe: s.subscribe !== 'false', addheader: s.addheader !== 'false',
         syncinternaldates: s.syncinternaldates !== 'false', useuid: s.useuid !== 'false',
         subfolder2: s.subfolder2 ?? '', exclude: s.exclude ?? '',
         regextrans2: s.regextrans2 ?? '', extraArgs: s.extraArgs ?? '',
@@ -123,6 +126,23 @@ export default function NewMigrationPage() {
       post(destServerId,   row.destEmail,   row.destPass),
     ])
     setAccounts(a => a.map((r, idx) => idx === i ? { ...r, testing: false, testResult: { source, dest } } : r))
+  }
+
+  const rowMapOptions = (row: AccountRow): MailboxMapOptions => ({
+    automap: options.automap,
+    subfolder2: row.options?.subfolder2 || options.subfolder2,
+    exclude: row.options?.exclude ?? options.exclude,
+    regextrans2: row.options?.regextrans2 || options.regextrans2,
+  })
+
+  const openBrowse = (i: number) => {
+    const row = accounts[i]
+    if (!sourceServerId || !destServerId) { setError('Pick source and destination servers before browsing folders.'); return }
+    if (!row.sourceEmail || !row.sourcePass || !row.destEmail || !row.destPass) {
+      setError('Fill both emails and both passwords before browsing folders.'); return
+    }
+    setError('')
+    setBrowseIndex(i)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -265,6 +285,7 @@ export default function NewMigrationPage() {
                               <button type="button" onClick={() => testRow(i)} disabled={row.testing} title="Test both IMAP logins" className="text-xs px-2 shrink-0 rounded border border-gray-700 text-gray-500 hover:text-blue-400 disabled:opacity-50">
                                 {row.testing ? '…' : '⚡'}
                               </button>
+                              <FolderBrowseButton onClick={() => openBrowse(i)} />
                               <button type="button" onClick={() => toggleExpand(i)} title="Per-account options" className={`text-xs px-2 shrink-0 rounded border ${overrides > 0 ? 'border-purple-600/40 text-purple-400 bg-purple-600/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
                                 ⚙{overrides > 0 && <span className="ml-1">{overrides}</span>}
                               </button>
@@ -281,6 +302,11 @@ export default function NewMigrationPage() {
                               <div className={row.testResult.dest.ok ? 'text-green-400' : 'text-red-400'}>
                                 {row.testResult.dest.ok ? '✓' : '✗'} Destination login{row.testResult.dest.error ? ` — ${row.testResult.dest.error}` : ' OK'}
                               </div>
+                              {row.testResult.source.ok && row.testResult.dest.ok && (
+                                <button type="button" onClick={() => openBrowse(i)} className="text-blue-400 hover:text-blue-300 mt-1">
+                                  Browse folders
+                                </button>
+                              )}
                             </div>
                           )}
                           {row.expanded && (
@@ -330,7 +356,7 @@ export default function NewMigrationPage() {
                       ))}
                     </div>
                     <div className="space-y-2">
-                      {([['syncinternaldates', '--syncinternaldates'], ['useuid', '--useuid']] as const).map(([key, label]) => (
+                      {([['syncinternaldates', '--syncinternaldates'], ['useuid', '--useuid'], ['subscribe', '--subscribe']] as const).map(([key, label]) => (
                         <label key={key} className="flex items-center gap-3 cursor-pointer">
                           <input type="checkbox" checked={(options as Record<string, unknown>)[key] as boolean} onChange={e => setOptions(o => ({ ...o, [key]: e.target.checked }))} className="rounded border-gray-700 bg-gray-900 text-blue-600" />
                           <span className="text-sm text-gray-300 font-mono">{label}</span>
@@ -408,6 +434,17 @@ export default function NewMigrationPage() {
           </form>
         </div>
       </main>
+
+      {browseIndex !== null && accounts[browseIndex] && sourceServerId && destServerId && (
+        <MailboxInspector
+          variant="overlay"
+          mode="adhoc"
+          source={{ serverId: sourceServerId, email: accounts[browseIndex].sourceEmail, password: accounts[browseIndex].sourcePass }}
+          dest={{ serverId: destServerId, email: accounts[browseIndex].destEmail, password: accounts[browseIndex].destPass }}
+          options={rowMapOptions(accounts[browseIndex])}
+          onClose={() => setBrowseIndex(null)}
+        />
+      )}
     </div>
   )
 }

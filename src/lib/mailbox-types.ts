@@ -35,7 +35,7 @@ export interface MailboxListing {
   error?: string
 }
 
-export type CompareStatus = 'matched' | 'mismatch' | 'missing' | 'extra' | 'excluded'
+export type CompareStatus = 'matched' | 'mismatch' | 'unknown' | 'missing' | 'extra' | 'excluded'
 
 export interface CompareSide {
   path: string
@@ -59,6 +59,7 @@ export interface MailboxCompareSummary {
   destFolders: number
   matched: number
   mismatch: number
+  unknown: number
   missing: number
   extra: number
   excluded: number

@@ -106,28 +106,20 @@ function mapSourceToDest(
   options: MailboxMapOptions,
   rules: Array<{ pattern: RegExp; replacement: string }>,
 ): { expected: string } {
-  let mapped = applyRegexTrans(folder.fullName, rules)
-  mapped = normalizeDelim(mapped, folder.delimiter || '/', destDelimiter || '/')
+  // imapsync order: automap / delimiter, then --subfolder2, then --regextrans2
+  let mapped = normalizeDelim(folder.fullName, folder.delimiter || '/', destDelimiter || '/')
 
   if (options.automap && folder.special && folder.special !== 'inbox') {
     const destSpecial = destFolders.find(d => d.special === folder.special)
-    if (destSpecial) {
-      let expected = destSpecial.fullName
-      if (options.subfolder2) {
-        expected = `${options.subfolder2}${destDelimiter || '/'}${expected}`
-      }
-      return { expected }
-    }
-    const canonical = folder.special.charAt(0).toUpperCase() + folder.special.slice(1)
-    mapped = canonical
+    mapped = destSpecial
+      ? destSpecial.fullName
+      : folder.special.charAt(0).toUpperCase() + folder.special.slice(1)
   }
 
   if (options.subfolder2) {
-    const prefix = options.subfolder2
-    mapped = mapped === 'INBOX' || mapped.toLowerCase() === 'inbox'
-      ? `${prefix}${destDelimiter || '/'}${mapped}`
-      : `${prefix}${destDelimiter || '/'}${mapped}`
+    mapped = `${options.subfolder2}${destDelimiter || '/'}${mapped}`
   }
+  mapped = applyRegexTrans(mapped, rules)
   return { expected: mapped }
 }
 
@@ -205,10 +197,10 @@ export function compareMailboxes(
     const destCount = dest.messages
     const delta = srcCount === null || destCount === null ? null : destCount - srcCount
     const countsKnown = srcCount !== null && destCount !== null
-    const matched = !countsKnown || srcCount === destCount
+    const status = !countsKnown ? 'unknown' : srcCount === destCount ? 'matched' : 'mismatch'
     rows.push({
       id: `row-${++id}`,
-      status: matched ? 'matched' : 'mismatch',
+      status,
       source: toSide(src),
       dest: toSide(dest),
       expectedDestName: expected,
@@ -231,9 +223,10 @@ export function compareMailboxes(
   const statusOrder: Record<CompareRow['status'], number> = {
     missing: 0,
     mismatch: 1,
-    extra: 2,
-    matched: 3,
-    excluded: 4,
+    unknown: 2,
+    extra: 3,
+    matched: 4,
+    excluded: 5,
   }
   rows.sort((a, b) => {
     const so = statusOrder[a.status] - statusOrder[b.status]
@@ -253,10 +246,13 @@ export function compareMailboxes(
       destFolders: selectableDest.length,
       matched: rows.filter(r => r.status === 'matched').length,
       mismatch: rows.filter(r => r.status === 'mismatch').length,
+      unknown: rows.filter(r => r.status === 'unknown').length,
       missing: rows.filter(r => r.status === 'missing').length,
       extra: rows.filter(r => r.status === 'extra').length,
       excluded: rows.filter(r => r.status === 'excluded').length,
-      sourceMessages: sumMessages(selectableSource),
+      sourceMessages: sumMessages(selectableSource.filter(f =>
+        !(excludeRe && (excludeRe.test(f.fullName) || excludeRe.test(f.path))),
+      )),
       destMatchedMessages,
       destMessages: sumMessages(selectableDest),
     },

@@ -5,6 +5,7 @@ import { compareMailboxes } from '@/lib/mailbox-compare'
 import {
   buildFolderTree,
   countMessages,
+  collectTreePaths,
   filterTree,
   formatCount,
   type FolderNode,
@@ -19,7 +20,7 @@ import type {
 } from '@/lib/mailbox-types'
 
 type Tab = 'browse' | 'compare'
-type Filter = 'all' | 'problems' | 'matched' | 'missing' | 'mismatch' | 'extra' | 'excluded'
+type Filter = 'all' | 'problems' | 'matched' | 'missing' | 'mismatch' | 'unknown' | 'extra' | 'excluded'
 
 interface StoredProps {
   mode: 'stored'
@@ -58,6 +59,7 @@ interface Payload {
 const STATUS_META: Record<CompareStatus, { label: string; pip: string; text: string; rail: string }> = {
   matched:  { label: 'Match',     pip: 'bg-emerald-400', text: 'text-emerald-300', rail: 'bg-emerald-500/40' },
   mismatch: { label: 'Count gap', pip: 'bg-amber-400',   text: 'text-amber-300',   rail: 'bg-amber-400/70' },
+  unknown:  { label: 'No count',  pip: 'bg-zinc-400',    text: 'text-zinc-300',    rail: 'bg-zinc-500/50' },
   missing:  { label: 'Missing',   pip: 'bg-red-400',     text: 'text-red-300',     rail: 'bg-red-500/50' },
   extra:    { label: 'Only dest', pip: 'bg-sky-400',     text: 'text-sky-300',     rail: 'bg-sky-500/40' },
   excluded: { label: 'Skipped',   pip: 'bg-zinc-500',    text: 'text-zinc-400',    rail: 'bg-zinc-600/50' },
@@ -168,12 +170,16 @@ function MailboxPane({
 
   useEffect(() => {
     if (!listing?.ok) return
+    if (query.trim()) {
+      setOpen(new Set(collectTreePaths(tree)))
+      return
+    }
     const next = new Set<string>()
     for (const f of listing.folders) {
       if (f.special === 'inbox' || !f.fullName.includes(f.delimiter || '/')) next.add(f.fullName)
     }
     setOpen(next)
-  }, [listing])
+  }, [listing, query, tree])
 
   const totals = listing?.ok ? countMessages(listing.folders.filter(f => f.selectable)) : null
 
@@ -301,7 +307,7 @@ function CompareView({
 
   const { summary, rows } = compare
   const visible = rows.filter(row => {
-    if (filter === 'problems' && (row.status === 'matched' || row.status === 'excluded')) return false
+    if (filter === 'problems' && (row.status === 'matched' || row.status === 'excluded' || row.status === 'unknown')) return false
     if (filter !== 'all' && filter !== 'problems' && row.status !== filter) return false
     if (!query.trim()) return true
     const q = query.toLowerCase()
@@ -311,7 +317,7 @@ function CompareView({
   })
 
   const problemCount = summary.missing + summary.mismatch + summary.extra
-  const transferable = summary.matched + summary.mismatch + summary.missing
+  const transferable = summary.matched + summary.mismatch + summary.missing + summary.unknown
   const folderPct = transferable > 0 ? Math.round((summary.matched / transferable) * 100) : 100
   const msgPct = summary.sourceMessages > 0
     ? Math.round((summary.destMatchedMessages / summary.sourceMessages) * 100)
@@ -322,6 +328,7 @@ function CompareView({
     ['problems', 'Problems', problemCount],
     ['matched', 'Match', summary.matched],
     ['mismatch', 'Count gap', summary.mismatch],
+    ['unknown', 'No count', summary.unknown],
     ['missing', 'Missing', summary.missing],
     ['extra', 'Only dest', summary.extra],
     ['excluded', 'Skipped', summary.excluded],
@@ -351,6 +358,7 @@ function CompareView({
         <div className="mt-4 h-1.5 rounded-full bg-[#1a1a28] overflow-hidden flex">
           {summary.matched > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${(summary.matched / Math.max(rows.length, 1)) * 100}%` }} />}
           {summary.mismatch > 0 && <div className="bg-amber-400 h-full" style={{ width: `${(summary.mismatch / Math.max(rows.length, 1)) * 100}%` }} />}
+          {summary.unknown > 0 && <div className="bg-zinc-400 h-full" style={{ width: `${(summary.unknown / Math.max(rows.length, 1)) * 100}%` }} />}
           {summary.missing > 0 && <div className="bg-red-500 h-full" style={{ width: `${(summary.missing / Math.max(rows.length, 1)) * 100}%` }} />}
           {summary.extra > 0 && <div className="bg-sky-500 h-full" style={{ width: `${(summary.extra / Math.max(rows.length, 1)) * 100}%` }} />}
           {summary.excluded > 0 && <div className="bg-zinc-600 h-full" style={{ width: `${(summary.excluded / Math.max(rows.length, 1)) * 100}%` }} />}

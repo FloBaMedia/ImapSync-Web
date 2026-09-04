@@ -56,6 +56,18 @@ export function folderMatchesQuery(folder: MailboxFolder, query: string): boolea
   return folder.fullName.toLowerCase().includes(q) || folder.name.toLowerCase().includes(q)
 }
 
+export function collectTreePaths(nodes: FolderNode[]): string[] {
+  const paths: string[] = []
+  const walk = (list: FolderNode[]) => {
+    for (const node of list) {
+      paths.push(node.folder.fullName)
+      walk(node.children)
+    }
+  }
+  walk(nodes)
+  return paths
+}
+
 export function filterTree(nodes: FolderNode[], query: string): FolderNode[] {
   if (!query.trim()) return nodes
   const keep = (node: FolderNode): FolderNode | null => {

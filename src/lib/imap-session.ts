@@ -162,14 +162,18 @@ class ImapSession {
   }
 
   async commands(cmds: string[], timeoutMs = this.timeoutMs): Promise<string[]> {
-    const tags = cmds.map(cmd => {
+    // Register every waiter before writing, so tagged replies that arrive in
+    // the same socket chunk as an earlier OK still match their tag.
+    const pending = cmds.map(cmd => {
       const tag = this.nextTag()
-      this.send(`${tag} ${cmd}`)
-      return { tag, label: cmd.split(' ')[0] }
+      return { tag, cmd, waiter: this.waitForTag(tag, cmd.split(' ')[0], timeoutMs) }
     })
+    for (const { tag, cmd } of pending) {
+      this.send(`${tag} ${cmd}`)
+    }
     const collected: string[] = []
-    for (const { tag, label } of tags) {
-      collected.push(...await this.waitForTag(tag, label, timeoutMs))
+    for (const { waiter } of pending) {
+      collected.push(...await waiter)
     }
     return collected
   }
@@ -323,11 +327,11 @@ export async function listMailbox(params: ImapConnectParams): Promise<MailboxLis
     }
 
     try { await session.command('LOGOUT', 5000) } catch { /* ignore */ }
-    session.close()
 
     return { ok: true, delimiter, folders, warning }
   } catch (e) {
-    session?.close()
     return { ok: false, delimiter: '/', folders: [], error: (e as Error).message }
+  } finally {
+    session?.close()
   }
 }

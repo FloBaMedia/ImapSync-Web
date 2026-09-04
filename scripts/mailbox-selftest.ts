@@ -64,6 +64,24 @@ assert(result.summary.matched === 2, `expected 2 matched, got ${result.summary.m
 assert(result.summary.mismatch === 1, `expected 1 mismatch, got ${result.summary.mismatch}`)
 assert(result.summary.missing === 0, `expected 0 missing, got ${result.summary.missing}`)
 assert(result.summary.excluded === 1, `expected 1 excluded, got ${result.summary.excluded}`)
+assert(result.summary.sourceMessages === 21, `excluded Spam from totals, got ${result.summary.sourceMessages}`)
+
+const unknown = compareMailboxes(
+  [folder('INBOX', 3), { ...folder('Work', 0), messages: null }],
+  [folder('INBOX', 3), { ...folder('Work', 0), messages: null }],
+  '/',
+  { automap: true, subfolder2: '', exclude: '', regextrans2: '' },
+)
+assert(unknown.summary.unknown === 1, `expected 1 unknown count, got ${unknown.summary.unknown}`)
+assert(unknown.summary.matched === 1, 'INBOX should still match')
+
+const prefixed = compareMailboxes(
+  [folder('INBOX', 1), folder('Work', 2)],
+  [folder('Archive/INBOX', 1), folder('Archive/Work', 2)],
+  '/',
+  { automap: true, subfolder2: 'Archive', exclude: '', regextrans2: '' },
+)
+assert(prefixed.summary.matched === 2, `subfolder2 should map before compare, got ${prefixed.summary.matched}`)
 
 const missing = compareMailboxes(
   [folder('INBOX', 3), folder('Archive', 9)],

@@ -27,7 +27,7 @@ A modern, self-hosted web UI for managing IMAP email migrations powered by [imap
 
 ### imapsync options
 
-- **Defaults from settings** — the global `Settings` page seeds sane defaults (`--ssl1`, `--ssl2`, `--automap`, `--addheader`, `--syncinternaldates`, `--useuid`, `--exclude`, `--regextrans2`, etc.)
+- **Defaults from settings** — the global `Settings` page seeds sane defaults (`--ssl1`, `--ssl2`, `--automap`, `--subscribe`, `--addheader`, `--syncinternaldates`, `--useuid`, `--exclude`, `--regextrans2`, etc.)
 - **Per-job overrides** — every option on the new/edit migration form overrides the defaults for that one job
 - **Per-account overrides** — `--subfolder2`, `--exclude`, `--regextrans2`, and arbitrary extra args can be set per individual account inside the same job (gear icon "⚙" on each row)
 - **Configurable concurrency** — per-job slider (1–10 parallel accounts) plus a global `MAX_PARALLEL` cap on the runner

@@ -35,7 +35,7 @@ try {
   }
 
   const defaults = [
-    ['ssl1', 'true'], ['ssl2', 'true'], ['automap', 'true'],
+    ['ssl1', 'true'], ['ssl2', 'true'], ['automap', 'true'], ['subscribe', 'true'],
     ['addheader', 'true'], ['syncinternaldates', 'true'], ['useuid', 'true'],
     ['subfolder2', ''], ['exclude', '(?i)Spam|Trash|Junk'],
     ['regextrans2', ''], ['extraArgs', ''],

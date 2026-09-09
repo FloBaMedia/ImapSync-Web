@@ -7,6 +7,7 @@ const BOOL_SETTINGS = [
   { key: 'ssl1',             label: '--ssl1',             desc: 'Enable SSL/TLS for the source server' },
   { key: 'ssl2',             label: '--ssl2',             desc: 'Enable SSL/TLS for the destination server' },
   { key: 'automap',          label: '--automap',          desc: 'Automatically map folders between servers' },
+  { key: 'subscribe',        label: '--subscribe',        desc: 'Subscribe to folders created on the destination' },
   { key: 'addheader',        label: '--addheader',        desc: 'Add a header to migrated messages' },
   { key: 'syncinternaldates',label: '--syncinternaldates',desc: 'Preserve internal date/time stamps' },
   { key: 'useuid',           label: '--useuid',           desc: 'Use UIDs for consistent synchronization' },

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Nav } from '@/components/Nav'
+import { FolderBrowseButton, MailboxInspector } from '@/components/MailboxInspector'
+import type { MailboxMapOptions } from '@/lib/mailbox-types'
 
 interface Server { id: string; name: string; host: string; preset: string | null }
 interface AccountOptions { subfolder2?: string; exclude?: string; regextrans2?: string; extraArgs?: string }
@@ -27,7 +29,7 @@ const ACCOUNT_OVERRIDABLE: Array<[keyof AccountOptions, string, string]> = [
 ]
 
 const emptyOptions = {
-  ssl1: true, ssl2: true, automap: true, addheader: true,
+  ssl1: true, ssl2: true, automap: true, subscribe: true, addheader: true,
   syncinternaldates: true, useuid: true,
   subfolder2: '', exclude: '',
   regextrans2: '', extraArgs: '',
@@ -52,6 +54,7 @@ export default function EditMigrationPage() {
   const [queueGroup, setQueueGroup] = useState('')
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'accounts' | 'options'>('accounts')
+  const [browseIndex, setBrowseIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -164,6 +167,24 @@ export default function EditMigrationPage() {
 
     const [source, dest] = await Promise.all([callTest(sourcePayload), callTest(destPayload)])
     setAccounts(a => a.map((r, idx) => idx === i ? { ...r, testing: false, testResult: { source, dest } } : r))
+  }
+
+  const rowMapOptions = (row: AccountRow): MailboxMapOptions => ({
+    automap: options.automap,
+    subfolder2: row.options?.subfolder2 || options.subfolder2,
+    exclude: row.options?.exclude ?? options.exclude,
+    regextrans2: row.options?.regextrans2 || options.regextrans2,
+  })
+
+  const openBrowse = (i: number) => {
+    const row = accounts[i]
+    if (!sourceServerId || !destServerId) { setError('Pick source and destination servers before browsing folders.'); return }
+    if (!row.sourceEmail || !row.destEmail) { setError('Both emails are required.'); return }
+    const sourceReady = Boolean(row.sourcePass || row.id)
+    const destReady = Boolean(row.destPass || row.id)
+    if (!sourceReady || !destReady) { setError('New rows need both passwords filled in before browsing folders.'); return }
+    setError('')
+    setBrowseIndex(i)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -312,6 +333,7 @@ export default function EditMigrationPage() {
                               <button type="button" onClick={() => testRow(i)} disabled={row.testing} title="Test both IMAP logins" className="text-xs px-2 shrink-0 rounded border border-gray-700 text-gray-500 hover:text-blue-400 disabled:opacity-50">
                                 {row.testing ? '…' : '⚡'}
                               </button>
+                              <FolderBrowseButton onClick={() => openBrowse(i)} />
                               <button type="button" onClick={() => toggleExpand(i)} title="Per-account options" className={`text-xs px-2 shrink-0 rounded border ${overrides > 0 ? 'border-purple-600/40 text-purple-400 bg-purple-600/10' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
                                 ⚙{overrides > 0 && <span className="ml-1">{overrides}</span>}
                               </button>
@@ -328,6 +350,11 @@ export default function EditMigrationPage() {
                               <div className={row.testResult.dest.ok ? 'text-green-400' : 'text-red-400'}>
                                 {row.testResult.dest.ok ? '✓' : '✗'} Destination login{row.testResult.dest.error ? ` — ${row.testResult.dest.error}` : ' OK'}
                               </div>
+                              {row.testResult.source.ok && row.testResult.dest.ok && (
+                                <button type="button" onClick={() => openBrowse(i)} className="text-blue-400 hover:text-blue-300 mt-1">
+                                  Browse folders
+                                </button>
+                              )}
                             </div>
                           )}
                           {row.expanded && (
@@ -366,7 +393,7 @@ export default function EditMigrationPage() {
                       ))}
                     </div>
                     <div className="space-y-2">
-                      {([['syncinternaldates', '--syncinternaldates'], ['useuid', '--useuid']] as const).map(([key, label]) => (
+                      {([['syncinternaldates', '--syncinternaldates'], ['useuid', '--useuid'], ['subscribe', '--subscribe']] as const).map(([key, label]) => (
                         <label key={key} className="flex items-center gap-3 cursor-pointer">
                           <input type="checkbox" checked={(options as Record<string, unknown>)[key] as boolean} onChange={e => setOptions(o => ({ ...o, [key]: e.target.checked }))} className="rounded border-gray-700 bg-gray-900 text-blue-600" />
                           <span className="text-sm text-gray-300 font-mono">{label}</span>
@@ -443,6 +470,27 @@ export default function EditMigrationPage() {
           </form>
         </div>
       </main>
+
+      {browseIndex !== null && accounts[browseIndex] && sourceServerId && destServerId && (
+        <MailboxInspector
+          variant="overlay"
+          mode="adhoc"
+          source={{
+            serverId: sourceServerId,
+            email: accounts[browseIndex].sourceEmail,
+            password: accounts[browseIndex].sourcePass || undefined,
+            accountId: accounts[browseIndex].id,
+          }}
+          dest={{
+            serverId: destServerId,
+            email: accounts[browseIndex].destEmail,
+            password: accounts[browseIndex].destPass || undefined,
+            accountId: accounts[browseIndex].id,
+          }}
+          options={rowMapOptions(accounts[browseIndex])}
+          onClose={() => setBrowseIndex(null)}
+        />
+      )}
     </div>
   )
 }
